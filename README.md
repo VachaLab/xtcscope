@@ -3,9 +3,11 @@
 > [!NOTE]
 > This tool works only with jobs submitted with [qq](https://github.com/VachaLab/qq).
 
-View the last frames of a running GROMACS job in VMD 1.9, VMD 2, ViaMD or any viewer that opens `<command> <gro> <xtc>`, even when the trajectory sits on the compute node's local scratch.
+xtcscope shows the last frames of a running GROMACS job straight from the compute node's local scratch. Much smoother than VMD on the node, and much faster than copying the whole trajectory.
 
-A small Rust agent on the compute node copies the last complete frames of the XTC through SSH to a temporary file on your desktop, and your viewer opens it like any local trajectory. The simulation is not touched.
+A small Rust program ("agent") on the node reads the XTC *from the end* and copies the last complete frames through SSH to a temporary file on your desktop, where your viewer opens them like any local trajectory. Even very long trajectories take only a moment to prepare. The simulation is not affected.
+
+xtcscope works with both VMD 1 and 2, as well as with ViaMD and any other molecular viewer that opens `<command> <gro> <xtc>`.
 
 ## Requirements
 
@@ -125,11 +127,11 @@ You would have to start a VNC server and tunnel a port for every job, just for a
 
 ## Troubleshooting
 
-| Message                                             | What to do                                                                   |
-| --------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `xtcscope-agent is not installed on <node>`         | Run the installer; it installs the agent into Robox home too.                |
-| `Several XTC files ...; choose one with --xtc PATH` | Without a terminal to ask on, name the file with `--xtc` (or `--gro`).       |
-| `... has N atoms but ... has M`                     | The GRO and the XTC describe different atoms.                                |
-| `Viewer '...' was not found`                        | Install the viewer, or point `--viewer` or `XTCSCOPE_VIEWER` at its command. |
+| Message                                             | What to do                                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `xtcscope-agent is not installed on <node>`         | Run the installer; it installs the agent into Robox home too.                                     |
+| `Several XTC files ...; choose one with --xtc PATH` | Without a terminal to ask on, name the file with `--xtc` (or `--gro`).                            |
+| `... has N atoms but ... has M`                     | The GRO and the XTC describe different atoms.                                                     |
+| `Viewer '...' was not found`                        | Install the viewer, activate its module, or point `--viewer` or `XTCSCOPE_VIEWER` at its command. |
 
 `--debug` shows every SSH command and every message from the agent, which usually tells where things went wrong.

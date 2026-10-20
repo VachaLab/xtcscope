@@ -3,7 +3,7 @@ name = "xtcscope-agent"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
-description = "Serves the last frames of a GROMACS XTC trajectory over IMD"
+description = "Copies the last frames of a GROMACS XTC trajectory"
 publish = false
 
 [[bin]]
@@ -17,11 +17,9 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1"
 clap = { version = "4.5", features = ["derive"] }
-libc = "0.2"
 molly = "=0.7.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-signal-hook = "0.3"
 
 [dev-dependencies]
 tempfile = "3"

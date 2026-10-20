@@ -8,7 +8,8 @@ use anyhow::{Context, anyhow, bail};
 use molly::XTCReader;
 use molly::selection::AtomSelection;
 
-use super::index::{FrameInfo, LocateError, Located, Warning, locate_last_frames};
+use super::index::{FrameInfo, Located, Warning};
+use super::open::{OpenError, open_located};
 
 /// One decoded frame, in the units stored in the XTC (nm, ps).
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -52,12 +53,7 @@ impl XtcSource {
     ///
     /// The file length is taken once, here; data written later is ignored.
     pub fn open(path: &Path, n: usize) -> Result<Self, OpenError> {
-        let file = File::open(path).map_err(|err| OpenError::Open(err.to_string()))?;
-        let len = file
-            .metadata()
-            .map_err(|err| OpenError::Open(err.to_string()))?
-            .len();
-        let located = locate_last_frames(&file, len, n).map_err(OpenError::Locate)?;
+        let (file, located) = open_located(path, n)?;
         Ok(XtcSource {
             reader: XTCReader::new(file),
             located,
@@ -134,34 +130,3 @@ impl FrameSource for XtcSource {
         Ok(())
     }
 }
-
-/// Why an XTC file could not be opened for streaming.
-#[derive(Debug)]
-pub enum OpenError {
-    /// The file could not be opened or its size read.
-    Open(String),
-    /// No frames could be located.
-    Locate(LocateError),
-}
-
-impl OpenError {
-    /// The error code used in the control protocol.
-    pub fn code(&self) -> &'static str {
-        match self {
-            OpenError::Open(_) => "xtc_open",
-            OpenError::Locate(err) => err.code(),
-        }
-    }
-}
-
-impl std::fmt::Display for OpenError {
-    /// The human-readable message.
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            OpenError::Open(msg) => write!(f, "could not open the XTC file: {msg}"),
-            OpenError::Locate(err) => write!(f, "{err}"),
-        }
-    }
-}
-
-impl std::error::Error for OpenError {}

@@ -3,12 +3,13 @@
 View the last frames of a running GROMACS job in VMD, even when the trajectory
 sits on the compute node's local scratch.
 
-A small agent on the compute node reads the XTC and serves its frames over the
-IMD protocol; an SSH tunnel carries them to VMD on your desktop, which renders
-them locally. Only coordinates cross the network.
+A small agent on the compute node finds the last complete frames of the XTC and
+copies their bytes, unchanged, through SSH into a temporary file on your desktop;
+VMD opens that file like any trajectory. Only compressed coordinates cross the
+network.
 
-> **Status:** under development (milestone 2: the agent serves frames to VMD over
-> IMDv2). Not usable end to end yet.
+> **Status:** under development (milestone 2: the agent extracts the last frames
+> as an XTC file). Not usable end to end yet.
 
 ## Repository layout
 
@@ -37,35 +38,16 @@ Try the frame location on a trajectory:
 cargo run --release -- inspect --xtc traj.xtc -n 10 --decode
 ```
 
-Serve frames to VMD by hand. On the compute node:
+Extract the last frames by hand (on the compute node, or over SSH):
 
 ```
-xtcscope-agent serve --xtc traj.xtc --socket /tmp/xtcscope-test.sock -n 10 --accept-timeout 600
+xtcscope-agent extract --xtc traj.xtc -n 10 > last.xtc
+ssh <node> '$HOME/xtcscope/xtcscope-agent extract --xtc /scratch/.../traj.xtc -n 10' > last.xtc
+vmd -gro conf.gro -xtc last.xtc
 ```
 
-On the desktop, forward a local port to that socket and connect VMD:
-
-```
-ssh -N -L 127.0.0.1:8888:/tmp/xtcscope-test.sock <node>
-```
-
-```
-mol new conf.gro type gro waitfor all
-imd keep 1
-imd connect localhost 8888
-```
-
-The agent waits `--accept-timeout` seconds (default 120) for VMD and then
-removes its socket; VMD then reports "Unable to ascertain relative endianness
-of remote machine", because the tunnel has nothing to connect to.
-
-Frames are sent 250 ms apart (`--frame-interval`): VMD keeps only the latest
-frame received and stores it once per redraw, so frames arriving faster than
-VMD redraws are lost. If VMD shows fewer frames than were sent, raise the
-interval.
-
-The agent exits when VMD disconnects (`imd detach`), on Ctrl-C, or when its
-stdin closes.
+`extract` writes the XTC data to stdout and JSON events (`located`, warnings,
+`done`, errors) to stderr. It refuses to write to a terminal.
 
 Script:
 

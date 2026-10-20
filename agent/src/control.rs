@@ -1,46 +1,42 @@
-//! Control protocol: one JSON object per line on stdout, flushed after each.
+//! Control protocol: JSON objects, one per line, flushed after each.
 //!
-//! The `xtcscope` script reads these events. Warnings and errors are also
-//! logged on stderr for people.
+//! `extract` writes its events to stderr, because stdout carries the XTC data;
+//! the `xtcscope` script parses them. `inspect` prints its events to stdout and
+//! repeats warnings and errors on stderr in readable form.
 
 use std::io::Write;
 
 use serde::Serialize;
 
-/// An event sent to the `xtcscope` script.
+/// An event for the `xtcscope` script or a person running `inspect`.
 #[derive(Debug, Serialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum Event<'a> {
-    /// Frames located and socket listening (`serve`).
-    Ready {
+    /// Frames found, before any data is written (`extract`).
+    Located {
         /// Agent version.
         version: &'a str,
+        /// XTC magic number of the file (1995 or 2023).
+        magic: i32,
         /// Atoms per frame.
         natoms: usize,
-        /// Number of frames that will be sent.
-        frames_sent: usize,
-        /// Step of the oldest frame sent.
-        first_step: u32,
-        /// Step of the newest frame sent.
-        last_step: u32,
-        /// Time of the oldest frame sent, ps.
-        first_time_ps: f32,
-        /// Time of the newest frame sent, ps.
-        last_time_ps: f32,
-        /// IMD protocol version spoken.
-        imd_version: i32,
-    },
-    /// Client accepted and Go received (`serve`).
-    Connected,
-    /// Last frame written to the socket (`serve`).
-    Done {
-        /// Number of frames sent.
+        /// Number of frames that will be written.
         frames: usize,
+        /// Step of the oldest frame.
+        first_step: u32,
+        /// Step of the newest frame.
+        last_step: u32,
+        /// Time of the oldest frame, ps.
+        first_time_ps: f32,
+        /// Time of the newest frame, ps.
+        last_time_ps: f32,
+        /// Number of bytes that will be written to stdout.
+        bytes: u64,
     },
-    /// Session over (`serve`): `client`, `kill`, `stdin` or `signal`.
-    Disconnected {
-        /// Why the session ended.
-        reason: &'a str,
+    /// Every byte written and flushed (`extract`).
+    Done {
+        /// Number of bytes written.
+        bytes: u64,
     },
     /// A located frame (`inspect`).
     Frame {
@@ -73,10 +69,15 @@ pub enum Event<'a> {
     },
 }
 
-/// Write an event to stdout (and warnings and errors to stderr too).
+/// Serialize an event as one line of JSON.
+fn to_line(event: &Event<'_>) -> String {
+    serde_json::to_string(event).expect("events always serialize")
+}
+
+/// Print an event on stdout (`inspect`); warnings and errors are repeated on
+/// stderr in readable form.
 ///
-/// A closed stdout is ignored: the script is gone and the agent will notice
-/// through stdin.
+/// A closed stdout is ignored.
 pub fn emit(event: &Event<'_>) {
     match event {
         Event::Warning { code, message } => {
@@ -87,10 +88,18 @@ pub fn emit(event: &Event<'_>) {
         }
         _ => {}
     }
-    let line = serde_json::to_string(event).expect("events always serialize");
     let mut out = std::io::stdout().lock();
-    let _ = writeln!(out, "{line}");
+    let _ = writeln!(out, "{}", to_line(event));
     let _ = out.flush();
+}
+
+/// Write an event to stderr as JSON only (`extract`, whose stdout is data).
+///
+/// A closed stderr is ignored.
+pub fn report(event: &Event<'_>) {
+    let mut err = std::io::stderr().lock();
+    let _ = writeln!(err, "{}", to_line(event));
+    let _ = err.flush();
 }
 
 #[cfg(test)]
@@ -100,9 +109,16 @@ mod tests {
     /// Events serialize with an `event` tag and snake_case names.
     #[test]
     fn event_json_shape() {
-        let json = serde_json::to_string(&Event::Disconnected { reason: "stdin" }).unwrap();
-        assert_eq!(json, r#"{"event":"disconnected","reason":"stdin"}"#);
-        let json = serde_json::to_string(&Event::Connected).unwrap();
-        assert_eq!(json, r#"{"event":"connected"}"#);
+        assert_eq!(
+            to_line(&Event::Done { bytes: 42 }),
+            r#"{"event":"done","bytes":42}"#
+        );
+        assert_eq!(
+            to_line(&Event::Error {
+                code: "io",
+                message: "x"
+            }),
+            r#"{"event":"error","code":"io","message":"x"}"#
+        );
     }
 }

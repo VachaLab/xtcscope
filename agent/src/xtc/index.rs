@@ -69,7 +69,7 @@ impl ReadAt for [u8] {
 }
 
 /// Fill `buf` from `offset`, failing with `UnexpectedEof` if the data runs out.
-fn read_full<R: ReadAt + ?Sized>(r: &R, buf: &mut [u8], offset: u64) -> io::Result<()> {
+pub(crate) fn read_full<R: ReadAt + ?Sized>(r: &R, buf: &mut [u8], offset: u64) -> io::Result<()> {
     let mut done = 0;
     while done < buf.len() {
         let n = r.read_at(&mut buf[done..], offset + done as u64)?;

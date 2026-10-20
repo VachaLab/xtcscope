@@ -15,7 +15,7 @@ Over X11, every redraw crosses the network as a picture, so rotating and zooming
 
 An XTC has no index, so VMD has to read the whole file, which can be gigabytes over the network, to reach the last frames. The agent jumps to the end and sends only the frames you asked for, so a longer trajectory doesn't slow it down. It also skips a frame mdrun is still writing, which could otherwise cause an error.
 
-## Why not run a VNC server on the compute node and connect to it with a VNC viewer?
+### Why not run a VNC server on the compute node and connect to it with a VNC viewer?
 
 Yeah. And do you know how to do that?
 

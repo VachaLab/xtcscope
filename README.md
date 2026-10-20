@@ -15,6 +15,10 @@ Over X11, every redraw crosses the network as a picture, so rotating and zooming
 
 An XTC has no index, so VMD has to read the whole file, which can be gigabytes over the network, to reach the last frames. The agent jumps to the end and sends only the frames you asked for, so a longer trajectory doesn't slow it down. It also skips a frame mdrun is still writing, which could otherwise cause an error.
 
+## Why not run a VNC server on the compute node and connect to it with a VNC viewer?
+
+Yeah. And do you know how to do that?
+
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv) needs to be installed on your desktop.
@@ -84,10 +88,10 @@ When there are several GRO or XTC files, xtcscope lists them, newest first, with
 
 Any program that loads a structure and a trajectory given as `<command> <gro> <xtc>` works:
 
-| Viewer  | `--viewer`                       |
-| ------- | -------------------------------- |
-| VMD 1/2 | `vmd` (the default)              |
-| ViaMD   | `viamd`                          |
+| Viewer  | `--viewer`          |
+| ------- | ------------------- |
+| VMD 1/2 | `vmd` (the default) |
+| ViaMD   | `viamd`             |
 
 To change the default for good, set `XTCSCOPE_VIEWER` in your `.bashrc`, e.g. `export XTCSCOPE_VIEWER=viamd`.
 

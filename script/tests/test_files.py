@@ -125,3 +125,11 @@ def test_human_size(xtcscope):
     """Sizes are shown in decimal units."""
     assert xtcscope.human_size(512) == "512 B"
     assert xtcscope.human_size(1_500_000) == "1.5 MB"
+
+
+def test_format_ps(xtcscope):
+    """Times are shown without float32 noise or trailing zeros."""
+    assert xtcscope.format_ps(700.00006) == "700"
+    assert xtcscope.format_ps(0.5) == "0.5"
+    assert xtcscope.format_ps(1_000_000.0) == "1000000"
+    assert xtcscope.format_ps(12.3456) == "12.346"

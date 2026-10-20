@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Script: fetch the last N frames with `xtcscope-agent extract` over the SSH
+  master connection into a temporary file (agent warnings shown as `WARN`, the
+  file checked against the byte counts the agent reports), close the
+  connection, open the GRO and the frames in the viewer, and delete everything
+  when the viewer exits. Ctrl-C and SIGTERM stop the agent and clean up (exit
+  130).
 - Script: find the job with qq (by ID, or the newest in the current directory),
   check its working directory, open one SSH master connection, choose the GRO
   from the input directory and the XTC from the working directory (listed over

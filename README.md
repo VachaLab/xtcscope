@@ -9,8 +9,8 @@ copies their bytes, unchanged, through SSH into a temporary file on your desktop
 the viewer opens that file like any trajectory. Only compressed coordinates cross
 the network.
 
-> **Status:** under development (milestone 4: the script finds the job and the
-> files; try it with `--dry-run`). Not usable end to end yet.
+> **Status:** feature-complete for v0.1 (milestone 5); documentation and the
+> first release follow.
 
 ## Installing on Robox
 
@@ -39,9 +39,16 @@ installation, so don't clone this repository to `~/xtcscope`.
 
 Without a job ID, the newest qq job in the current directory is used. The GRO
 is taken from the job's input directory and the XTC from its working directory;
-if there are several, you are asked to choose. The viewer is `vmd` unless
-`--viewer` or the `XTCSCOPE_VIEWER` environment variable says otherwise, e.g.
-`export XTCSCOPE_VIEWER=viamd` or `--viewer "vmd -nt"`.
+if there are several, you are asked to choose. The last N frames (default 10)
+are copied into a temporary directory and opened in the viewer; they are deleted
+when the viewer exits.
+
+The viewer is `vmd` unless `--viewer` or the `XTCSCOPE_VIEWER` environment
+variable says otherwise, e.g. `export XTCSCOPE_VIEWER=viamd` or
+`--viewer "vmd -nt"`. Any program that opens `<command> <gro> <xtc>` works.
+
+`--dry-run` shows what would be fetched and opened without doing it; `--debug`
+prints every command and every message from the agent.
 
 ## Repository layout
 

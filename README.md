@@ -86,8 +86,7 @@ Any program that loads a structure and a trajectory given as `<command> <gro> <x
 
 | Viewer  | `--viewer`                       |
 | ------- | -------------------------------- |
-| VMD 1.9 | `vmd` (the default)              |
-| VMD 2   | the command you start VMD 2 with |
+| VMD 1/2 | `vmd` (the default)              |
 | ViaMD   | `viamd`                          |
 
 To change the default for good, set `XTCSCOPE_VIEWER` in your `.bashrc`, e.g. `export XTCSCOPE_VIEWER=viamd`.

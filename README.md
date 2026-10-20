@@ -7,18 +7,6 @@ View the last frames of a running GROMACS job in VMD 1.9, VMD 2, ViaMD or any vi
 
 A small Rust agent on the compute node copies the last complete frames of the XTC through SSH to a temporary file on your desktop, and your viewer opens it like any local trajectory. The simulation is not touched.
 
-### Why not run VMD on the compute node?
-
-Over X11, every redraw crosses the network as a picture, so rotating and zooming lag. xtcscope sends the coordinates once, and your desktop draws them as fast as a local file.
-
-### Why not open the remote XTC in a local VMD, through sshfs or a tunnel?
-
-An XTC has no index, so VMD has to read the whole file, which can be gigabytes over the network, to reach the last frames. The agent jumps to the end and sends only the frames you asked for, so a longer trajectory doesn't slow it down. It also skips a frame mdrun is still writing, which could otherwise cause an error.
-
-### Why not run a VNC server on the compute node and connect to it with a VNC viewer?
-
-Yeah. And do you know how to do that?
-
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv) needs to be installed on your desktop.
@@ -116,6 +104,24 @@ To change the default for good, set `XTCSCOPE_VIEWER` in your `.bashrc`, e.g. `e
 - **Does not follow a running simulation.** xtcscope copies the last frames once and doesn't follow the job. To see newer frames, run it again.
 - **The newest frame may be missing.** A frame mdrun is still writing is skipped, and mdrun writes its output in bursts, so the file on the node can lag the simulation by minutes.
 - **The GRO comes from the input directory.** Its atoms must match the XTC's exactly. A job that writes only some atoms (`compressed-x-grps`) needs a matching GRO in its input directory; files created during the run, such as `confout.gro`, can't be used.
+
+## FAQ
+
+### Won't this slow down my job, or other people's jobs on the compute node?
+
+Hardly. The agent runs on the compute node only for a moment: it reads the end of the XTC and sends just the frames you asked for. It also runs at the lowest priority a user can set (`nice -n 19 ionice -c3`), so the simulation gets the CPU and the disk first. The only longer run is the rare fallback that reads a damaged XTC from the start, and that runs at the lowest priority too.
+
+### Why not run VMD on the compute node instead?
+
+Over X11, every redraw crosses the network as a picture, so rotating and zooming lag. xtcscope sends the coordinates once, and your desktop draws them as fast as a local file.
+
+### Why not open the remote XTC in a local VMD, through sshfs or a tunnel instead?
+
+An XTC has no index, so VMD has to read the whole file, which can be gigabytes over the network, to reach the last frames. The xtcscope agent jumps to the end and sends only the frames you asked for, so a longer trajectory doesn't slow it down. It also skips a frame mdrun is still writing, which could otherwise cause an error.
+
+### Why not run a VNC server on the compute node and connect to it with a VNC viewer instead?
+
+You would have to start a VNC server and tunnel a port for every job, just for a quick check. VMD on the node also still reads the whole XTC from the start to reach the last frames. xtcscope is one command, and it reads only the end of the file.
 
 ## Troubleshooting
 

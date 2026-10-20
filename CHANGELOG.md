@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Script: find the job with qq (by ID, or the newest in the current directory),
+  check its working directory, open one SSH master connection, choose the GRO
+  from the input directory and the XTC from the working directory (listed over
+  SSH with atom counts; ask when there are several), check that the atom counts
+  match; `--dry-run` prints the extract and viewer commands. Any viewer that
+  opens `<command> <gro> <xtc>`: `--viewer` or `XTCSCOPE_VIEWER`, default `vmd`.
 - Releases: publishing a GitHub release runs `release.yml`, which checks the
   tag against `agent/Cargo.toml`, builds a static musl agent, fills version and
   repository into the script and installers, smoke-tests the installer, and

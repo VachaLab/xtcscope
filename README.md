@@ -1,23 +1,27 @@
 # xtcscope
 
-View the last frames of a running GROMACS job in VMD, even when the trajectory
-sits on the compute node's local scratch.
+View the last frames of a running GROMACS job in VMD 1.9, VMD 2, ViaMD or any
+viewer that opens `<command> <gro> <xtc>`, even when the trajectory sits on the
+compute node's local scratch.
 
 A small agent on the compute node finds the last complete frames of the XTC and
 copies their bytes, unchanged, through SSH into a temporary file on your desktop;
-VMD opens that file like any trajectory. Only compressed coordinates cross the
-network.
+the viewer opens that file like any trajectory. Only compressed coordinates cross
+the network.
 
-> **Status:** under development (milestone 3: releases and installers). Not
-> usable end to end yet.
+> **Status:** under development (milestone 4: the script finds the job and the
+> files; try it with `--dry-run`). Not usable end to end yet.
 
 ## Installing on Robox
 
-Each GitHub release has an installer for your desktop and the compute nodes:
+Install or update the latest release on your desktop and the compute nodes:
 
 ```
-bash <(curl -fsSL https://github.com/VachaLab/xtcscope/releases/download/vX.Y.Z/xtcscope-robox-install.sh)
+bash <(curl -fsSL https://github.com/VachaLab/xtcscope/releases/latest/download/xtcscope-robox-install.sh)
 ```
+
+Pre-releases are never "latest"; install one with its own URL,
+`https://github.com/VachaLab/xtcscope/releases/download/<tag>/xtcscope-robox-install.sh`.
 
 It installs `xtcscope/` (the `xtcscope` script, the `xtcscope-agent` binary and
 `VERSION`) into `$HOME` and into `/storage/brno14-ceitec/home/$USER`. Running it
@@ -26,6 +30,18 @@ startup files: run `~/xtcscope/xtcscope` by its full path, or add an alias.
 
 The installer refuses to touch an existing `~/xtcscope` that is not an
 installation, so don't clone this repository to `~/xtcscope`.
+
+## Usage
+
+```
+~/xtcscope/xtcscope [JOB_ID] [--viewer CMD] [--gro NAME] [--xtc NAME] [-n N] [--dry-run]
+```
+
+Without a job ID, the newest qq job in the current directory is used. The GRO
+is taken from the job's input directory and the XTC from its working directory;
+if there are several, you are asked to choose. The viewer is `vmd` unless
+`--viewer` or the `XTCSCOPE_VIEWER` environment variable says otherwise, e.g.
+`export XTCSCOPE_VIEWER=viamd` or `--viewer "vmd -nt"`.
 
 ## Repository layout
 
@@ -59,13 +75,13 @@ Extract the last frames by hand (on the compute node, or over SSH):
 ```
 xtcscope-agent extract --xtc traj.xtc -n 10 > last.xtc
 ssh <node> '$HOME/xtcscope/xtcscope-agent extract --xtc /scratch/.../traj.xtc -n 10' > last.xtc
-vmd -gro conf.gro -xtc last.xtc
+vmd conf.gro last.xtc
 ```
 
 `extract` writes the XTC data to stdout and JSON events (`located`, warnings,
 `done`, errors) to stderr. It refuses to write to a terminal.
 
-Script:
+Script (its tests need neither qq nor a cluster; `--dry-run` needs both):
 
 ```
 uvx ruff check .
@@ -93,5 +109,4 @@ Publishing triggers the release workflow. It fails unless the tag matches
 `agent/Cargo.toml`. It builds a static `x86_64-unknown-linux-musl` agent, fills
 the version and repository into the script and installers, smoke-tests the
 installer, attaches the tarball, both installers and `sha256sums.txt` to the
-release, and appends the install command to the release notes. Re-running the
-workflow replaces the attached files.
+release. Re-running the workflow replaces the attached files.

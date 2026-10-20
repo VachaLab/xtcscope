@@ -37,21 +37,32 @@ Try the frame location on a trajectory:
 cargo run --release -- inspect --xtc traj.xtc -n 10 --decode
 ```
 
-Serve frames to a local VMD (VMD connects over TCP, the agent listens on a Unix
-socket, so `socat` bridges the two):
+Serve frames to VMD by hand. On the compute node:
 
 ```
-cargo run --release -- serve --xtc traj.xtc --socket /tmp/xtcscope-test.sock -n 10
-socat TCP-LISTEN:8888,bind=127.0.0.1 UNIX-CONNECT:/tmp/xtcscope-test.sock
+xtcscope-agent serve --xtc traj.xtc --socket /tmp/xtcscope-test.sock -n 10 --accept-timeout 600
 ```
 
-then in VMD's Tk console:
+On the desktop, forward a local port to that socket and connect VMD:
+
+```
+ssh -N -L 127.0.0.1:8888:/tmp/xtcscope-test.sock <node>
+```
 
 ```
 mol new conf.gro type gro waitfor all
 imd keep 1
 imd connect localhost 8888
 ```
+
+The agent waits `--accept-timeout` seconds (default 120) for VMD and then
+removes its socket; VMD then reports "Unable to ascertain relative endianness
+of remote machine", because the tunnel has nothing to connect to.
+
+Frames are sent 250 ms apart (`--frame-interval`): VMD keeps only the latest
+frame received and stores it once per redraw, so frames arriving faster than
+VMD redraws are lost. If VMD shows fewer frames than were sent, raise the
+interval.
 
 The agent exits when VMD disconnects (`imd detach`), on Ctrl-C, or when its
 stdin closes.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Agent: pace frames with `--frame-interval` (default 250 ms); VMD stores only
+  the latest frame per redraw and lost frames sent back to back.
 - Agent: `serve` subcommand streaming the last N frames to one IMDv2 client
   (VMD 1.9) on a Unix socket created with mode 0600 and removed on exit;
   handshake, Go, Coordinates in Å; Pause (toggle), Disconnect, Kill and

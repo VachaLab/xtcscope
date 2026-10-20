@@ -29,6 +29,8 @@ struct Agent {
 
 impl Agent {
     /// Write `data` as an XTC file and start `serve` on it with `extra` arguments.
+    ///
+    /// Frames are sent without pacing unless `extra` sets `--frame-interval`.
     fn start(data: &[u8], extra: &[&str]) -> Agent {
         let dir = tempfile::tempdir().unwrap();
         let xtc = dir.path().join("traj.xtc");
@@ -51,6 +53,11 @@ impl Agent {
             .arg("--socket")
             .arg(&socket)
             .args(extra)
+            .args(if extra.contains(&"--frame-interval") {
+                &[][..]
+            } else {
+                &["--frame-interval", "0"][..]
+            })
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -419,4 +426,48 @@ fn invalid_xtc_fails_before_listening() {
     assert_eq!(agent.expect("error")["code"], "xtc_invalid");
     assert_eq!(agent.wait_exit().code(), Some(1));
     assert!(!agent.socket.exists());
+}
+
+/// Frames are spaced by `--frame-interval`, so VMD can store each one.
+#[test]
+fn frames_are_paced() {
+    let data = make_xtc(Magic::Xtc1995, 200, 3);
+    let agent = Agent::start(&data, &["--frame-interval", "300"]);
+    agent.expect("ready");
+    let mut client = agent.connect();
+    read_handshake(&mut client);
+    send(&mut client, 3, 0);
+    read_coordinates(&mut client, 200);
+    let first = Instant::now();
+    read_coordinates(&mut client, 200);
+    read_coordinates(&mut client, 200);
+    let spread = first.elapsed();
+    assert!(
+        spread >= Duration::from_millis(550),
+        "frames too close: {spread:?}"
+    );
+    agent.expect("connected");
+    agent.expect("done");
+}
+
+/// A Disconnect during the pause between frames ends the session at once.
+#[test]
+fn disconnect_during_the_pause_is_handled_promptly() {
+    let data = make_xtc(Magic::Xtc1995, 200, 3);
+    let mut agent = Agent::start(&data, &["--frame-interval", "5000"]);
+    agent.expect("ready");
+    let mut client = agent.connect();
+    read_handshake(&mut client);
+    send(&mut client, 3, 0);
+    read_coordinates(&mut client, 200);
+    agent.expect("connected");
+    let sent = Instant::now();
+    send(&mut client, 0, 0);
+    assert_eq!(agent.expect("disconnected")["reason"], "client");
+    assert!(
+        sent.elapsed() < Duration::from_secs(2),
+        "took {:?}",
+        sent.elapsed()
+    );
+    assert!(agent.wait_exit().success());
 }

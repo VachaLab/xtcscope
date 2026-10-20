@@ -10,7 +10,7 @@ use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::packet::{ClientMessage, HEADER_SIZE, Header, ImdVersion, encode_handshake};
 use crate::filter::AtomFilter;
@@ -308,16 +308,39 @@ impl Session<'_> {
         }
         Ok(None)
     }
+
+    /// Wait for `duration` while still handling client messages.
+    ///
+    /// Returns `Some(reason)` if the session ended during the wait.
+    fn wait_for(&mut self, duration: Duration) -> Result<Option<EndReason>, ServeError> {
+        let deadline = Instant::now() + duration;
+        loop {
+            let now = Instant::now();
+            if now >= deadline {
+                return Ok(None);
+            }
+            if wait_readable(self.stream.as_raw_fd(), Some(deadline - now))?
+                && let Some(end) = self.read_message()?
+            {
+                return Ok(Some(end));
+            }
+        }
+    }
 }
 
 /// Serve one connected client: handshake, all frames of `source`, then wait
 /// until the client disconnects.
+///
+/// `frame_interval` is the pause after each frame but the last. VMD keeps only
+/// the latest frame received and takes it once per redraw, so frames sent
+/// back to back overwrite each other before VMD stores them.
 pub fn run_session(
     stream: UnixStream,
     version: ImdVersion,
     source: &mut dyn FrameSource,
     filter: &dyn AtomFilter,
     handshake_timeout: Duration,
+    frame_interval: Duration,
     events: &mut dyn FnMut(SessionEvent),
 ) -> Result<EndReason, ServeError> {
     let mut session = Session {
@@ -349,6 +372,12 @@ pub fn run_session(
             Ok(()) => {}
             Err(err) if is_disconnect(&err) => return Ok(EndReason::Client),
             Err(err) => return Err(err.into()),
+        }
+        if i + 1 < source.len()
+            && !frame_interval.is_zero()
+            && let Some(end) = session.wait_for(frame_interval)?
+        {
+            return Ok(end);
         }
     }
     (session.events)(SessionEvent::Done {

@@ -63,6 +63,12 @@ enum Command {
         #[arg(long, default_value_t = 120,
               value_parser = clap::value_parser!(u64).range(1..))]
         accept_timeout: u64,
+        /// Milliseconds to wait after each frame. VMD keeps only the latest
+        /// frame it received and stores it once per redraw, so frames sent
+        /// faster than VMD redraws are lost; raise this for large systems.
+        #[arg(long, default_value_t = 250,
+              value_parser = clap::value_parser!(u64).range(0..=60_000))]
+        frame_interval: u64,
     },
     /// Locate the last frames of an XTC file and print them as JSON lines
     /// (for testing and debugging).
@@ -99,12 +105,14 @@ fn main() -> ExitCode {
             frames,
             imd_version,
             accept_timeout,
+            frame_interval,
         } => serve(
             &xtc,
             &socket,
             frames as usize,
             imd_version,
             Duration::from_secs(accept_timeout),
+            Duration::from_millis(frame_interval),
         ),
         Command::Inspect {
             xtc,
@@ -175,6 +183,7 @@ fn serve(
     n: usize,
     version: ImdVersion,
     accept_timeout: Duration,
+    frame_interval: Duration,
 ) -> ExitCode {
     start_shutdown_watchers();
 
@@ -220,6 +229,7 @@ fn serve(
         &mut source,
         &All,
         HANDSHAKE_TIMEOUT,
+        frame_interval,
         &mut on_event,
     ) {
         Ok(reason) => {

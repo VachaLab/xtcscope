@@ -7,7 +7,8 @@ A small agent on the compute node reads the XTC and serves its frames over the
 IMD protocol; an SSH tunnel carries them to VMD on your desktop, which renders
 them locally. Only coordinates cross the network.
 
-> **Status:** under development (milestone 0: repository skeleton). Not usable yet.
+> **Status:** under development (milestone 1: the agent locates and decodes frames).
+> Not usable yet.
 
 ## Repository layout
 
@@ -28,6 +29,12 @@ cd agent
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
+```
+
+Try the frame location on a trajectory:
+
+```
+cargo run --release -- inspect --xtc traj.xtc -n 10 --decode
 ```
 
 Script:

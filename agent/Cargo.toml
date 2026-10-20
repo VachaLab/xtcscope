@@ -2,7 +2,7 @@
 name = "xtcscope-agent"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 description = "Serves the last frames of a GROMACS XTC trajectory over IMD"
 publish = false
 
@@ -10,8 +10,19 @@ publish = false
 name = "xtcscope-agent"
 path = "src/main.rs"
 
+[lib]
+name = "xtcscope_agent"
+path = "src/lib.rs"
+
 [dependencies]
+anyhow = "1"
 clap = { version = "4.5", features = ["derive"] }
+molly = "=0.7.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"
 
 [profile.release]
 opt-level = 3

@@ -9,6 +9,7 @@ use common::{make_xtc, reference};
 use molly::Magic;
 use serde_json::Value;
 
+/// Run the agent binary with `args`.
 fn run(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_xtcscope-agent"))
         .args(args)
@@ -16,6 +17,7 @@ fn run(args: &[&str]) -> Output {
         .unwrap()
 }
 
+/// Parse the JSON lines the agent printed on stdout.
 fn events(output: &Output) -> Vec<Value> {
     String::from_utf8(output.stdout.clone())
         .unwrap()
@@ -24,6 +26,7 @@ fn events(output: &Output) -> Vec<Value> {
         .collect()
 }
 
+/// Write `data` to a temporary `.xtc` file.
 fn temp_xtc(data: &[u8]) -> tempfile::NamedTempFile {
     let mut file = tempfile::Builder::new().suffix(".xtc").tempfile().unwrap();
     file.write_all(data).unwrap();
@@ -31,6 +34,7 @@ fn temp_xtc(data: &[u8]) -> tempfile::NamedTempFile {
     file
 }
 
+/// `inspect` prints one frame event per located frame.
 #[test]
 fn lists_the_last_frames() {
     let data = make_xtc(Magic::Xtc1995, 200, 25);
@@ -49,6 +53,7 @@ fn lists_the_last_frames() {
     }
 }
 
+/// `--decode` adds the atom count and the first position.
 #[test]
 fn decode_adds_atoms_and_first_position() {
     let data = make_xtc(Magic::Xtc2023, 200, 4);
@@ -68,6 +73,7 @@ fn decode_adds_atoms_and_first_position() {
     }
 }
 
+/// Warnings precede the frames and are logged on stderr too.
 #[test]
 fn warnings_come_first_and_go_to_stderr_too() {
     let mut data = make_xtc(Magic::Xtc1995, 200, 25);
@@ -93,6 +99,7 @@ fn warnings_come_first_and_go_to_stderr_too() {
     assert!(stderr.contains("warning (scan_fallback)"));
 }
 
+/// Errors print one error event and exit 1.
 #[test]
 fn errors_exit_one_with_an_error_event() {
     let text = temp_xtc(&b"definitely not an xtc file\n".repeat(5));
@@ -109,6 +116,7 @@ fn errors_exit_one_with_an_error_event() {
     }
 }
 
+/// Without arguments, usage is printed and the exit code is 2.
 #[test]
 fn no_arguments_prints_help_and_fails() {
     let output = run(&[]);

@@ -13,7 +13,9 @@ use super::index::{FrameInfo, LocateError, Located, Warning, locate_last_frames}
 /// One decoded frame, in the units stored in the XTC (nm, ps).
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Frame {
+    /// Simulation step.
     pub step: i64,
+    /// Simulation time in ps.
     pub time_ps: f64,
     /// Box vectors A, B, C in nm, as stored in the XTC.
     pub box_nm: [f32; 9],
@@ -23,9 +25,11 @@ pub struct Frame {
 
 /// A fixed sequence of frames to send.
 pub trait FrameSource {
+    /// Number of atoms in every frame.
     fn natoms(&self) -> usize;
     /// Number of frames selected for sending.
     fn len(&self) -> usize;
+    /// Whether no frames are selected.
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -35,8 +39,11 @@ pub trait FrameSource {
 
 /// The last N complete frames of an XTC file.
 pub struct XtcSource {
+    /// molly reader on the trajectory.
     reader: XTCReader<File>,
+    /// The frames selected for sending.
     located: Located,
+    /// Reused decoding buffer.
     scratch: molly::Frame,
 }
 
@@ -75,14 +82,17 @@ impl XtcSource {
 }
 
 impl FrameSource for XtcSource {
+    /// Atom count of the file.
     fn natoms(&self) -> usize {
         self.located.natoms
     }
 
+    /// Number of located frames.
     fn len(&self) -> usize {
         self.located.frames.len()
     }
 
+    /// Decode located frame `i` with molly, converting panics into errors.
     fn read(&mut self, i: usize, out: &mut Frame) -> anyhow::Result<()> {
         let info = *self
             .located
@@ -130,6 +140,7 @@ impl FrameSource for XtcSource {
 pub enum OpenError {
     /// The file could not be opened or its size read.
     Open(String),
+    /// No frames could be located.
     Locate(LocateError),
 }
 
@@ -144,6 +155,7 @@ impl OpenError {
 }
 
 impl std::fmt::Display for OpenError {
+    /// The human-readable message.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             OpenError::Open(msg) => write!(f, "could not open the XTC file: {msg}"),

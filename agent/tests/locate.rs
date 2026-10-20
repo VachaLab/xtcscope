@@ -7,22 +7,27 @@ use common::{MAGICS, fake_header, make_xtc, reference};
 use molly::Magic;
 use xtcscope_agent::xtc::{LocateError, Located, locate_last_frames};
 
+/// Locate the last `n` frames of an in-memory file.
 fn locate(data: &[u8], n: usize) -> Result<Located, LocateError> {
     locate_last_frames(data, data.len() as u64, n)
 }
 
+/// Offsets of the located frames.
 fn offsets(located: &Located) -> Vec<u64> {
     located.frames.iter().map(|f| f.offset).collect()
 }
 
+/// Codes of the warnings produced.
 fn codes(located: &Located) -> Vec<&'static str> {
     located.warnings.iter().map(|w| w.code).collect()
 }
 
+/// The last `n` elements of `v`.
 fn tail(v: &[u64], n: usize) -> Vec<u64> {
     v[v.len().saturating_sub(n)..].to_vec()
 }
 
+/// Clean files of both magics and many sizes match molly front to back.
 #[test]
 fn clean_files_match_molly() {
     for magic in MAGICS {
@@ -47,6 +52,7 @@ fn clean_files_match_molly() {
     }
 }
 
+/// A half-written last frame is skipped whatever its length, without warnings.
 #[test]
 fn partial_last_frame_at_every_byte() {
     for magic in MAGICS {
@@ -65,6 +71,7 @@ fn partial_last_frame_at_every_byte() {
     }
 }
 
+/// Header patterns and fake headers inside frame data are never taken for frames.
 #[test]
 fn planted_patterns_are_never_accepted() {
     for magic in MAGICS {
@@ -89,6 +96,7 @@ fn planted_patterns_are_never_accepted() {
     }
 }
 
+/// A fake header that fools the backward chain is caught; the fallback finds the real frames.
 #[test]
 fn fake_header_that_fools_the_chain_falls_back_correctly() {
     for magic in MAGICS {
@@ -108,6 +116,7 @@ fn fake_header_that_fools_the_chain_falls_back_correctly() {
     }
 }
 
+/// Damage mid-file: the newer frames after the damage are sent, with both warnings.
 #[test]
 fn broken_chain_in_the_middle_sends_frames_after_the_damage() {
     let mut data = make_xtc(Magic::Xtc1995, 200, 25);
@@ -119,6 +128,7 @@ fn broken_chain_in_the_middle_sends_frames_after_the_damage() {
     assert_eq!(codes(&located), ["scan_fallback", "scan_stopped"]);
 }
 
+/// Damage just before the last frame: only the last frame is sent, with both warnings.
 #[test]
 fn damage_near_the_end_warns() {
     let mut data = make_xtc(Magic::Xtc1995, 200, 25);
@@ -130,6 +140,7 @@ fn damage_near_the_end_warns() {
     assert_eq!(codes(&located), ["scan_fallback", "scan_stopped"]);
 }
 
+/// Damage right after frame 0: the frames after the damage are sent.
 #[test]
 fn damaged_first_frames_use_forward_scan_result() {
     // Damage right after frame 0: the backward chain cannot reach the start,
@@ -144,6 +155,7 @@ fn damaged_first_frames_use_forward_scan_result() {
     assert_eq!(codes(&located), ["scan_fallback", "scan_stopped"]);
 }
 
+/// Garbage after the last frame: the frame is kept and `trailing_data` is reported.
 #[test]
 fn trailing_garbage_keeps_the_last_frame_and_warns() {
     let mut data = make_xtc(Magic::Xtc1995, 200, 25);
@@ -154,6 +166,7 @@ fn trailing_garbage_keeps_the_last_frame_and_warns() {
     assert_eq!(codes(&located), ["trailing_data"]);
 }
 
+/// A one-frame file yields that frame.
 #[test]
 fn single_frame_file() {
     let data = make_xtc(Magic::Xtc1995, 200, 1);
@@ -162,6 +175,7 @@ fn single_frame_file() {
     assert!(located.warnings.is_empty());
 }
 
+/// Files without a complete frame report `xtc_empty`.
 #[test]
 fn empty_and_too_short_files_are_empty() {
     let data = make_xtc(Magic::Xtc1995, 200, 3);
@@ -174,6 +188,7 @@ fn empty_and_too_short_files_are_empty() {
     }
 }
 
+/// Files that are not XTC report `xtc_invalid`.
 #[test]
 fn non_xtc_files_are_invalid() {
     let text = b"This is not an XTC file at all, just some text.\n".repeat(10);

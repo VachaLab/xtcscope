@@ -8,6 +8,7 @@ use common::{MAGICS, coords, make_xtc, reference};
 use molly::Magic;
 use xtcscope_agent::xtc::{Frame, FrameSource, XtcSource};
 
+/// Write `data` to a temporary file.
 fn write_temp(data: &[u8]) -> tempfile::NamedTempFile {
     let mut file = tempfile::NamedTempFile::new().unwrap();
     file.write_all(data).unwrap();
@@ -15,6 +16,7 @@ fn write_temp(data: &[u8]) -> tempfile::NamedTempFile {
     file
 }
 
+/// Decoded frames equal molly's and the written coordinates within precision.
 #[test]
 fn decoded_frames_match_molly_and_the_input() {
     for magic in MAGICS {
@@ -43,6 +45,7 @@ fn decoded_frames_match_molly_and_the_input() {
     }
 }
 
+/// Frames appended after opening are not part of the selection.
 #[test]
 fn file_written_after_open_is_ignored() {
     let data = make_xtc(Magic::Xtc1995, 200, 5);
@@ -57,6 +60,7 @@ fn file_written_after_open_is_ignored() {
     assert_eq!(frame.step, 4000);
 }
 
+/// Corrupted compressed data never unwinds out of `read`.
 #[test]
 fn corrupted_frame_data_never_panics() {
     let mut data = make_xtc(Magic::Xtc1995, 2000, 3);
@@ -73,6 +77,7 @@ fn corrupted_frame_data_never_panics() {
     let _ = source.read(2, &mut frame);
 }
 
+/// Opening reports `xtc_open`, `xtc_empty` and `xtc_invalid`.
 #[test]
 fn open_reports_error_codes() {
     let missing = XtcSource::open(std::path::Path::new("/nonexistent/traj.xtc"), 10)

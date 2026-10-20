@@ -45,16 +45,19 @@ const BLOCK: u64 = 1 << 20;
 
 /// Positional reads, implemented for files and for in-memory buffers (tests).
 pub trait ReadAt {
+    /// Read up to `buf.len()` bytes at `offset`; returns the number read (0 at the end).
     fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize>;
 }
 
 impl ReadAt for File {
+    /// Positional read that leaves the file cursor untouched.
     fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
         FileExt::read_at(self, buf, offset)
     }
 }
 
 impl ReadAt for [u8] {
+    /// Copy from the buffer; reads past the end return fewer bytes.
     fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
         let start = usize::try_from(offset)
             .unwrap_or(usize::MAX)
@@ -65,6 +68,7 @@ impl ReadAt for [u8] {
     }
 }
 
+/// Fill `buf` from `offset`, failing with `UnexpectedEof` if the data runs out.
 fn read_full<R: ReadAt + ?Sized>(r: &R, buf: &mut [u8], offset: u64) -> io::Result<()> {
     let mut done = 0;
     while done < buf.len() {
@@ -90,24 +94,31 @@ pub struct FrameInfo {
     pub offset: u64,
     /// Size of the frame in bytes, including padding.
     pub size: u64,
+    /// Simulation step, from the header.
     pub step: u32,
+    /// Simulation time in ps, from the header.
     pub time_ps: f32,
 }
 
 /// Something the user should know about, though the work continues.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Warning {
+    /// Machine-readable code, e.g. `scan_fallback`.
     pub code: &'static str,
+    /// Explanation for the user.
     pub message: String,
 }
 
 /// The result of locating frames.
 #[derive(Debug)]
 pub struct Located {
+    /// XTC magic number of the file (1995 or 2023).
     pub magic: i32,
+    /// Number of atoms in every frame.
     pub natoms: usize,
     /// The located frames, oldest first. Never empty.
     pub frames: Vec<FrameInfo>,
+    /// Problems found while locating the frames.
     pub warnings: Vec<Warning>,
 }
 
@@ -118,6 +129,7 @@ pub enum LocateError {
     Empty(String),
     /// The file is not a valid XTC file.
     Invalid(String),
+    /// Reading the file failed.
     Io(io::Error),
 }
 
@@ -133,6 +145,7 @@ impl LocateError {
 }
 
 impl fmt::Display for LocateError {
+    /// The human-readable message.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LocateError::Empty(msg) | LocateError::Invalid(msg) => f.write_str(msg),
@@ -144,6 +157,7 @@ impl fmt::Display for LocateError {
 impl std::error::Error for LocateError {}
 
 impl From<io::Error> for LocateError {
+    /// Wrap an I/O error.
     fn from(err: io::Error) -> Self {
         LocateError::Io(err)
     }
@@ -160,35 +174,43 @@ enum Probe {
     NotHeader,
 }
 
+/// Big-endian u32 from the first 4 bytes.
 fn be_u32(b: &[u8]) -> u32 {
     u32::from_be_bytes([b[0], b[1], b[2], b[3]])
 }
 
+/// Big-endian i32 from the first 4 bytes.
 fn be_i32(b: &[u8]) -> i32 {
     i32::from_be_bytes([b[0], b[1], b[2], b[3]])
 }
 
+/// Big-endian f32 from the first 4 bytes.
 fn be_f32(b: &[u8]) -> f32 {
     f32::from_be_bytes([b[0], b[1], b[2], b[3]])
 }
 
+/// Big-endian u64 from the first 8 bytes.
 fn be_u64(b: &[u8]) -> u64 {
     u64::from_be_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])
 }
 
+/// XDR padding needed after `n` bytes to reach a multiple of 4.
 fn pad4(n: u64) -> u64 {
     (4 - n % 4) % 4
 }
 
 /// What every frame header in one file starts with.
 struct Layout {
+    /// XTC magic number (1995 or 2023).
     magic: i32,
+    /// Atoms per frame.
     natoms: u32,
     /// magic and natoms, big-endian: the first 8 bytes of every header.
     pattern: [u8; 8],
 }
 
 impl Layout {
+    /// Layout for a file with the given magic number and atom count.
     fn new(magic: i32, natoms: u32) -> Self {
         let mut pattern = [0u8; 8];
         pattern[..4].copy_from_slice(&magic.to_be_bytes());
@@ -291,17 +313,22 @@ impl Layout {
 /// file towards its start. Only offsets divisible by 4 are considered, because
 /// every XTC field and padded block is a multiple of 4 bytes.
 struct Candidates<'a, R: ?Sized> {
+    /// The file.
     r: &'a R,
+    /// File length considered.
     len: u64,
+    /// The 8 bytes every header starts with.
     pattern: [u8; 8],
     /// Offsets below this one are still to be searched.
     upper: u64,
     /// Matches in the current block, ascending; `pop` yields the highest.
     pending: Vec<u64>,
+    /// Reused read buffer.
     buf: Vec<u8>,
 }
 
 impl<'a, R: ReadAt + ?Sized> Candidates<'a, R> {
+    /// Candidates in the first `len` bytes of `r`, starting from the end.
     fn new(r: &'a R, len: u64, pattern: [u8; 8]) -> Self {
         Candidates {
             r,
@@ -313,6 +340,7 @@ impl<'a, R: ReadAt + ?Sized> Candidates<'a, R> {
         }
     }
 
+    /// The next lower candidate offset, or `None` once the start is reached.
     fn next(&mut self) -> io::Result<Option<u64>> {
         loop {
             if let Some(p) = self.pending.pop() {
@@ -372,6 +400,7 @@ fn anchor<R: ReadAt + ?Sized>(r: &R, len: u64) -> Result<Layout, LocateError> {
     }
 }
 
+/// Result of a forward scan.
 struct Forward {
     /// The last frames found, oldest first, at most `n`.
     frames: Vec<FrameInfo>,
@@ -379,7 +408,7 @@ struct Forward {
     stopped_at: Option<u64>,
 }
 
-/// Walk the file from its start, header to header.
+/// Walk the file from its start, header to header, keeping the last `n` frames.
 fn forward_scan<R: ReadAt + ?Sized>(
     r: &R,
     len: u64,
@@ -566,6 +595,7 @@ pub fn locate_last_frames<R: ReadAt + ?Sized>(
 mod tests {
     use super::*;
 
+    /// A compressed-frame header with zeroed box and ranges.
     fn header(magic: i32, natoms: u32, nbytes: u64) -> Vec<u8> {
         let mut b = Vec::new();
         b.extend(magic.to_be_bytes());
@@ -586,6 +616,7 @@ mod tests {
         b
     }
 
+    /// Frame sizes for both magics; one byte short is incomplete, not invalid.
     #[test]
     fn probe_sizes_compressed_frames() {
         for (magic, base) in [(MAGIC_1995, 92u64), (MAGIC_2023, 96u64)] {
@@ -602,6 +633,7 @@ mod tests {
         }
     }
 
+    /// Header checks reject a wrong natoms repeat, bad ranges and huge nbytes.
     #[test]
     fn probe_rejects_mismatched_repeat_and_bad_ranges() {
         let layout = Layout::new(MAGIC_1995, 100);
@@ -619,6 +651,7 @@ mod tests {
         assert_eq!(layout.probe(&huge[..], len, 0).unwrap(), Probe::NotHeader);
     }
 
+    /// Only 4-byte aligned patterns are found, also across block boundaries.
     #[test]
     fn candidates_only_aligned_and_across_blocks() {
         let pattern = Layout::new(MAGIC_1995, 3).pattern;

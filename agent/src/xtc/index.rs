@@ -84,6 +84,7 @@ pub(crate) fn read_full<R: ReadAt + ?Sized>(r: &R, buf: &mut [u8], offset: u64) 
         }
         done += n;
     }
+
     Ok(())
 }
 
@@ -234,6 +235,7 @@ impl Layout {
         if p >= len {
             return Ok(Probe::Incomplete);
         }
+
         let avail = len - p;
         let take = avail.min(MAX_PROBE as u64) as usize;
         let mut storage = [0u8; MAX_PROBE];
@@ -243,15 +245,19 @@ impl Layout {
         if take < 8 {
             return Ok(Probe::Incomplete);
         }
+
         if buf[..8] != self.pattern {
             return Ok(Probe::NotHeader);
         }
+
         if take < HEADER_SIZE as usize {
             return Ok(Probe::Incomplete);
         }
+
         if be_u32(&buf[52..56]) != self.natoms {
             return Ok(Probe::NotHeader);
         }
+
         let step = be_u32(&buf[8..12]);
         let time_ps = be_f32(&buf[12..16]);
 
@@ -262,10 +268,12 @@ impl Layout {
             if take < 88 + width {
                 return Ok(Probe::Incomplete);
             }
+
             let precision = be_f32(&buf[56..60]);
             if !(precision.is_finite() && precision > 0.0) {
                 return Ok(Probe::NotHeader);
             }
+
             for i in 0..3 {
                 let lo = be_i32(&buf[60 + 4 * i..]);
                 let hi = be_i32(&buf[72 + 4 * i..]);
@@ -273,20 +281,24 @@ impl Layout {
                     return Ok(Probe::NotHeader);
                 }
             }
+
             let nbytes = if width == 8 {
                 be_u64(&buf[88..96])
             } else {
                 u64::from(be_u32(&buf[88..92]))
             };
+
             if nbytes == 0 || nbytes > self.max_nbytes() {
                 return Ok(Probe::NotHeader);
             }
+
             88 + width as u64 + nbytes + pad4(nbytes)
         };
 
         if size > avail {
             return Ok(Probe::Incomplete);
         }
+
         Ok(Probe::Frame(FrameInfo {
             offset: p,
             size,
@@ -346,9 +358,11 @@ impl<'a, R: ReadAt + ?Sized> Candidates<'a, R> {
             if let Some(p) = self.pending.pop() {
                 return Ok(Some(p));
             }
+
             if self.upper == 0 {
                 return Ok(None);
             }
+
             let start = self.upper.saturating_sub(BLOCK) & !3;
             // 7 bytes of overlap so a pattern crossing the block boundary is seen.
             let read_end = (self.upper + 7).min(self.len);
@@ -362,6 +376,7 @@ impl<'a, R: ReadAt + ?Sized> Candidates<'a, R> {
                 }
                 p += 4;
             }
+
             self.upper = start;
         }
     }
@@ -374,6 +389,7 @@ fn anchor<R: ReadAt + ?Sized>(r: &R, len: u64) -> Result<Layout, LocateError> {
             "the file holds no complete frame ({len} bytes)"
         )));
     }
+
     let mut head = [0u8; 8];
     read_full(r, &mut head, 0)?;
     let magic = be_i32(&head[..4]);
@@ -382,12 +398,14 @@ fn anchor<R: ReadAt + ?Sized>(r: &R, len: u64) -> Result<Layout, LocateError> {
             "not an XTC file: magic number {magic} at offset 0 (expected {MAGIC_1995} or {MAGIC_2023})"
         )));
     }
+
     let natoms = be_u32(&head[4..8]);
     if natoms == 0 || natoms > i32::MAX as u32 {
         return Err(LocateError::Invalid(format!(
             "not an XTC file: implausible atom count {natoms} in the first frame"
         )));
     }
+
     let layout = Layout::new(magic, natoms);
     match layout.probe(r, len, 0)? {
         Probe::Frame(_) => Ok(layout),
@@ -434,6 +452,7 @@ fn forward_scan<R: ReadAt + ?Sized>(
             Probe::NotHeader => break Some(p),
         }
     };
+
     Ok(Forward {
         frames: tail.into(),
         stopped_at,
@@ -531,6 +550,7 @@ pub fn locate_last_frames<R: ReadAt + ?Sized>(
         Some(q) => format!("no frame ends at offset {q}"),
         None => "the last complete frame could not be identified".to_string(),
     };
+
     warnings.push(Warning {
         code: "scan_fallback",
         message: format!(
@@ -583,6 +603,7 @@ pub fn locate_last_frames<R: ReadAt + ?Sized>(
             "the file holds no complete frame".to_string(),
         ));
     }
+
     Ok(Located {
         magic: layout.magic,
         natoms,

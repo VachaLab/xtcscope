@@ -102,6 +102,7 @@ impl FrameSource for XtcSource {
         let result = catch_unwind(AssertUnwindSafe(|| {
             reader.read_frame_at_offset::<false>(scratch, info.offset, &AtomSelection::All)
         }));
+
         match result {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
@@ -113,6 +114,7 @@ impl FrameSource for XtcSource {
                 info.offset
             ),
         }
+
         let natoms = self.located.natoms;
         if scratch.positions.len() != 3 * natoms {
             bail!(
@@ -122,11 +124,13 @@ impl FrameSource for XtcSource {
                 natoms
             );
         }
+
         out.step = i64::from(scratch.step);
         out.time_ps = f64::from(scratch.time);
         out.box_nm = scratch.boxvec;
         out.positions_nm.clear();
         out.positions_nm.extend_from_slice(&scratch.positions);
+
         Ok(())
     }
 }

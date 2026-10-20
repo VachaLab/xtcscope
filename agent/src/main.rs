@@ -92,16 +92,19 @@ fn extract(path: &Path, n: usize) -> ExitCode {
             "refusing to write binary XTC data to a terminal; redirect stdout to a file",
         );
     }
+
     let (file, located) = match open_located(path, n) {
         Ok(opened) => opened,
         Err(err) => return fail_report(err.code(), &err.to_string()),
     };
+
     for warning in &located.warnings {
         report(&Event::Warning {
             code: warning.code,
             message: &warning.message,
         });
     }
+
     let frames = &located.frames;
     let (start, end) = byte_range(frames).expect("located frames are never empty");
     let (first, last) = (frames[0], frames[frames.len() - 1]);
@@ -122,6 +125,7 @@ fn extract(path: &Path, n: usize) -> ExitCode {
         out.flush()?;
         Ok(bytes)
     });
+
     match copied {
         Ok(bytes) => {
             report(&Event::Done { bytes });
@@ -137,12 +141,14 @@ fn inspect(path: &Path, n: usize, decode: bool) -> ExitCode {
         Ok(source) => source,
         Err(err) => return fail_emit(err.code(), &err.to_string()),
     };
+
     for warning in source.warnings() {
         emit(&Event::Warning {
             code: warning.code,
             message: &warning.message,
         });
     }
+
     let infos = source.frames().to_vec();
     let mut frame = Frame::default();
     for (i, info) in infos.iter().enumerate() {
@@ -163,6 +169,7 @@ fn inspect(path: &Path, n: usize, decode: bool) -> ExitCode {
             first_position_nm,
         });
     }
+
     ExitCode::SUCCESS
 }
 

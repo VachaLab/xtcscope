@@ -40,9 +40,11 @@ pub fn copy_frames<R: ReadAt + ?Sized, W: Write>(
             ));
         }
     }
+
     let Some((start, end)) = byte_range(frames) else {
         return Ok(0);
     };
+
     let mut buf = vec![0u8; CHUNK.min(end - start) as usize];
     let mut pos = start;
     while pos < end {
@@ -51,6 +53,7 @@ pub fn copy_frames<R: ReadAt + ?Sized, W: Write>(
         out.write_all(&buf[..n])?;
         pos += n as u64;
     }
+
     Ok(end - start)
 }
 

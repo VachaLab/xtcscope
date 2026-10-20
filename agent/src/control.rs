@@ -88,6 +88,7 @@ pub fn emit(event: &Event<'_>) {
         }
         _ => {}
     }
+
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "{}", to_line(event));
     let _ = out.flush();

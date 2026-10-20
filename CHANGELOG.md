@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Releases: `release.yml` builds a static musl agent on version tags, checks the
+  tag against `agent/Cargo.toml`, fills version and repository into the script
+  and installers, smoke-tests the installer and publishes the files with
+  checksums (suffixed versions as pre-releases).
+- Installers: `xtcscope-install.sh <home> <url>` and `xtcscope-robox-install.sh`
+  (desktop and cluster homes); same version left alone, no startup files edited,
+  an existing non-installation `~/xtcscope` refused; tests in `install/tests`.
 - Agent: `extract` subcommand writing the last N complete frames to stdout as
   a valid XTC file (bytes copied unchanged, nothing decoded), with `located`,
   `done`, warning and error events as JSON lines on stderr; refuses to write to

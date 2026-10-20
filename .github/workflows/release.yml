@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that the tag matches the agent version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          cargo_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' agent/Cargo.toml | head -n 1)"
+          if [ "$tag" != "$cargo_version" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match version ${cargo_version} in agent/Cargo.toml"
+            exit 1
+          fi
+          echo "VERSION=${tag}" >> "$GITHUB_ENV"
+          # A version with a suffix (0.1.0-alpha.1) is published as a pre-release.
+          if [[ "$tag" == *-* ]]; then
+            echo "PRERELEASE=--prerelease" >> "$GITHUB_ENV"
+          else
+            echo "PRERELEASE=" >> "$GITHUB_ENV"
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+
+      - name: Install musl tools
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build the static agent
+        working-directory: agent
+        run: cargo build --release --locked --target x86_64-unknown-linux-musl
+
+      - name: Check the binary
+        run: |
+          bin=agent/target/x86_64-unknown-linux-musl/release/xtcscope-agent
+          file "$bin"
+          file "$bin" | grep -Eq 'statically linked|static-pie linked'
+          test "$("$bin" --version)" = "xtcscope-agent ${VERSION}"
+
+      - name: Assemble the release files
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          pkg=dist/pkg/xtcscope
+          mkdir -p "$pkg"
+          cp agent/target/x86_64-unknown-linux-musl/release/xtcscope-agent "$pkg/"
+          sed "s/__VERSION__/${VERSION}/g" script/xtcscope > "$pkg/xtcscope"
+          echo "$VERSION" > "$pkg/VERSION"
+          chmod 755 "$pkg/xtcscope" "$pkg/xtcscope-agent"
+          tar -C dist/pkg -czf dist/xtcscope-release.tar.gz xtcscope
+          for f in install/xtcscope-install.sh install/xtcscope-robox-install.sh; do
+            out="dist/$(basename "$f")"
+            sed -e "s/__VERSION__/${VERSION}/g" -e "s|__REPO__|${REPO}|g" "$f" > "$out"
+            chmod 755 "$out"
+          done
+          if grep -l '__VERSION__\|__REPO__' dist/*.sh "$pkg/xtcscope"; then
+            echo "::error::Placeholders left in the files above"
+            exit 1
+          fi
+          (cd dist && sha256sum xtcscope-release.tar.gz xtcscope-install.sh xtcscope-robox-install.sh > sha256sums.txt)
+          cat dist/sha256sums.txt
+
+      - name: Smoke-test the installers
+        run: |
+          home="$(mktemp -d)"
+          HOME="$home" XTCSCOPE_RELEASE_BASE="file://${PWD}/dist" dist/xtcscope-robox-install.sh
+          test "$("$home/xtcscope/xtcscope-agent" --version)" = "xtcscope-agent ${VERSION}"
+          test "$(cat "$home/xtcscope/VERSION")" = "${VERSION}"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          cat > dist/notes.md <<EOF
+          Install or update on robox (desktop and compute nodes):
+
+          \`\`\`
+          bash <(curl -fsSL https://github.com/${REPO}/releases/download/${GITHUB_REF_NAME}/xtcscope-robox-install.sh)
+          \`\`\`
+
+          See CHANGELOG.md for the changes.
+          EOF
+          # shellcheck disable=SC2086  # PRERELEASE is empty or one flag
+          gh release create "$GITHUB_REF_NAME" \
+            --title "xtcscope ${VERSION}" \
+            --notes-file dist/notes.md \
+            $PRERELEASE \
+            dist/xtcscope-release.tar.gz \
+            dist/xtcscope-install.sh \
+            dist/xtcscope-robox-install.sh \
+            dist/sha256sums.txt

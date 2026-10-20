@@ -49,12 +49,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: ShellCheck
-        # install/ is filled in milestone 3; until then there is nothing to check
-        run: |
-          shopt -s nullglob
-          files=(install/*.sh)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No installer scripts yet."
-          else
-            shellcheck "${files[@]}"
-          fi
+        run: shellcheck install/*.sh install/tests/*.sh
+      - name: Installer tests
+        run: bash install/tests/run.sh

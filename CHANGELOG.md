@@ -1,34 +1,9 @@
 # Changelog
 
-## Unreleased
+## v0.1.0
 
-- Script: fetch the last N frames with `xtcscope-agent extract` over the SSH
-  master connection into a temporary file (agent warnings shown as `WARN`, the
-  file checked against the byte counts the agent reports), close the
-  connection, open the GRO and the frames in the viewer, and delete everything
-  when the viewer exits. Ctrl-C and SIGTERM stop the agent and clean up (exit
-  130).
-- Script: find the job with qq (by ID, or the newest in the current directory),
-  check its working directory, open one SSH master connection, choose the GRO
-  from the input directory and the XTC from the working directory (listed over
-  SSH with atom counts; ask when there are several), check that the atom counts
-  match; `--dry-run` prints the extract and viewer commands. Any viewer that
-  opens `<command> <gro> <xtc>`: `--viewer` or `XTCSCOPE_VIEWER`, default `vmd`.
-- Releases: publishing a GitHub release runs `release.yml`, which checks the
-  tag against `agent/Cargo.toml`, builds a static musl agent, fills version and
-  repository into the script and installers, smoke-tests the installer, and
-  attaches the files with checksums to the release.
-- Installers: `xtcscope-install.sh <home> <url>` and `xtcscope-robox-install.sh`
-  (desktop and cluster homes); same version left alone, no startup files edited,
-  an existing non-installation `~/xtcscope` refused; tests in `install/tests`.
-- Agent: `extract` subcommand writing the last N complete frames to stdout as
-  a valid XTC file (bytes copied unchanged, nothing decoded), with `located`,
-  `done`, warning and error events as JSON lines on stderr; refuses to write to
-  a terminal. Replaces the IMD server of the first milestone 2 attempt, which
-  lost frames in VMD and could not carry the box.
-- Agent: locate the last N complete frames of an XTC by scanning backwards from
-  the end, with a forward-scan fallback and `scan_fallback`, `scan_stopped` and
-  `trailing_data` warnings; decode them with molly 0.7.0; `inspect` subcommand
-  printing the located frames as JSON lines (`--decode` to also decode them).
-- Repository skeleton: agent answering `--version`, script stub answering
-  `--help` and `--version`, CI for Rust, Python and shell.
+First release.
+
+- `xtcscope` script: finds a qq job (by ID, or the newest in the current directory), takes the GRO from its input directory and the XTC from its working directory (asking when there are several), checks that their atom counts match, copies the last N frames (default 10) from the compute node through one SSH connection, and opens them in a viewer: VMD 1.9, VMD 2, ViaMD or any program that opens `<command> <gro> <xtc>` (`--viewer`, `XTCSCOPE_VIEWER`). `--dry-run` and `--debug` for checking what it does.
+- `xtcscope-agent`: finds the last complete frames of an XTC by scanning backwards from the end, skipping a frame mdrun is still writing, with a forward-scan fallback and warnings for damaged files; copies their bytes unchanged (`extract`); `inspect` for debugging. A static x86_64 binary.
+- Installers for Robox (desktop and cluster homes) that never edit startup files, and a release workflow that builds and attaches everything to a published GitHub release.

@@ -1,119 +1,126 @@
 # xtcscope
 
-View the last frames of a running GROMACS job in VMD 1.9, VMD 2, ViaMD or any
-viewer that opens `<command> <gro> <xtc>`, even when the trajectory sits on the
-compute node's local scratch.
+> [!NOTE]
+> This tool works only with jobs submitted with [qq](https://github.com/VachaLab/qq).
 
-A small agent on the compute node finds the last complete frames of the XTC and
-copies their bytes, unchanged, through SSH into a temporary file on your desktop;
-the viewer opens that file like any trajectory. Only compressed coordinates cross
-the network.
+View the last frames of a running GROMACS job in VMD 1.9, VMD 2, ViaMD or any viewer that opens `<command> <gro> <xtc>`, even when the trajectory sits on the compute node's local scratch.
 
-> **Status:** feature-complete for v0.1 (milestone 5); documentation and the
-> first release follow.
+A small Rust agent on the compute node copies the last complete frames of the XTC through SSH to a temporary file on your desktop, and your viewer opens it like any local trajectory. The simulation is not touched.
+
+### Why not run VMD on the compute node?
+
+Over X11, every redraw crosses the network as a picture, so rotating and zooming lag. xtcscope sends the coordinates once, and your desktop draws them as fast as a local file.
+
+### Why not open the remote XTC in a local VMD, through sshfs or a tunnel?
+
+An XTC has no index, so VMD has to read the whole file, which can be gigabytes over the network, to reach the last frames. The agent jumps to the end and sends only the frames you asked for, so a longer trajectory doesn't slow it down. It also skips a frame mdrun is still writing, which could otherwise cause an error.
+
+## Requirements
+
+- Jobs submitted with [qq](https://github.com/VachaLab/qq) (PBS on Robox). Infinity and raw PBS are **not** supported.
+- On your desktop: [uv](https://docs.astral.sh/uv) and SSH access to the compute nodes.
+- A viewer: VMD 1.9, VMD 2, ViaMD, or another program that opens `<command> <gro> <xtc>`.
+- A GRO file in the job's input directory with the same atoms as the XTC.
 
 ## Installing on Robox
 
 Install or update the latest release on your desktop and the compute nodes:
 
-```
+```bash
 bash <(curl -fsSL https://github.com/VachaLab/xtcscope/releases/latest/download/xtcscope-robox-install.sh)
 ```
 
-Pre-releases are never "latest"; install one with its own URL,
-`https://github.com/VachaLab/xtcscope/releases/download/<tag>/xtcscope-robox-install.sh`.
+Pre-releases are never "latest"; install one with its own URL:
 
-It installs `xtcscope/` (the `xtcscope` script, the `xtcscope-agent` binary and
-`VERSION`) into `$HOME` and into `/storage/brno14-ceitec/home/$USER`. Running it
-again with the same version changes nothing. It never edits `.bashrc` or other
-startup files: run `~/xtcscope/xtcscope` by its full path, or add an alias.
+```bash
+https://github.com/VachaLab/xtcscope/releases/download/<version>/xtcscope-robox-install.sh
+```
 
-The installer refuses to touch an existing `~/xtcscope` that is not an
-installation, so don't clone this repository to `~/xtcscope`.
+It installs `xtcscope/` into `$HOME` and into `/storage/brno14-ceitec/home/$USER`. Running it again with the same version changes nothing.
+
+> [!NOTE]
+> The installer refuses to touch an existing `~/xtcscope` that is not an installation, so don't clone this repository to `~/xtcscope`.
 
 ## Usage
 
-```
-~/xtcscope/xtcscope [JOB_ID] [--viewer CMD] [--gro NAME] [--xtc NAME] [-n N] [--dry-run]
-```
-
-Without a job ID, the newest qq job in the current directory is used. The GRO
-is taken from the job's input directory and the XTC from its working directory;
-if there are several, you are asked to choose. The last N frames (default 10)
-are copied into a temporary directory and opened in the viewer; they are deleted
-when the viewer exits.
-
-The viewer is `vmd` unless `--viewer` or the `XTCSCOPE_VIEWER` environment
-variable says otherwise, e.g. `export XTCSCOPE_VIEWER=viamd` or
-`--viewer "vmd -nt"`. Any program that opens `<command> <gro> <xtc>` works.
-
-`--dry-run` shows what would be fetched and opened without doing it; `--debug`
-prints every command and every message from the agent.
-
-## Repository layout
-
-```
-script/xtcscope     desktop script (Python, run with uv)
-script/tests/       pytest tests for the script
-agent/              xtcscope-agent (Rust)
-install/            installers and their tests
-.github/workflows/  CI and release
+```bash
+xtcscope [JOB_ID] [--viewer CMD] [--gro NAME] [--xtc NAME] [-n N] [--dry-run] [--debug]
 ```
 
-## Development
+Go to the directory you submitted the job from and run
 
-Agent:
-
-```
-cd agent
-cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
+```bash
+xtcscope
 ```
 
-Try the frame location on a trajectory:
+xtcscope finds the newest qq job there, takes the GRO from that directory and the XTC from the job's working directory, copies the last 10 frames to your desktop and opens them in VMD. The copy is deleted when you close the viewer. You may need to load the VMD module before running the command.
 
-```
-cargo run --release -- inspect --xtc traj.xtc -n 10 --decode
-```
+More examples:
 
-Extract the last frames by hand (on the compute node, or over SSH):
-
-```
-xtcscope-agent extract --xtc traj.xtc -n 10 > last.xtc
-ssh <node> '$HOME/xtcscope/xtcscope-agent extract --xtc /scratch/.../traj.xtc -n 10' > last.xtc
-vmd conf.gro last.xtc
+```bash
+xtcscope 1234567                    # a job by its ID, from any directory
+xtcscope -n 50                      # the last 50 frames
+xtcscope --viewer viamd             # open in ViaMD
+xtcscope --xtc md_whole.xtc         # pick the XTC without being asked
+xtcscope --dry-run                  # show what would be fetched and opened
 ```
 
-`extract` writes the XTC data to stdout and JSON events (`located`, warnings,
-`done`, errors) to stderr. It refuses to write to a terminal.
+### Options
 
-Script (its tests need neither qq nor a cluster; `--dry-run` needs both):
+| Option               | Meaning                                                                      | Default                                     |
+| -------------------- | ---------------------------------------------------------------------------- | ------------------------------------------- |
+| `JOB_ID`             | The job to view.                                                             | The newest qq job in the current directory. |
+| `--viewer CMD`       | Command that opens `<gro> <xtc>`; may include options, e.g. `"vmd -nt"`.     | `$XTCSCOPE_VIEWER`, or `vmd`.               |
+| `--gro NAME`         | GRO file in the job's input directory.                                       | The only one, or ask.                       |
+| `--xtc NAME`         | XTC file in the job's working directory.                                     | The only one, or ask.                       |
+| `-n N`, `--frames N` | Number of frames from the end of the XTC; all of them if there are fewer.    | 10                                          |
+| `--dry-run`          | Choose and check the files, then print the commands instead of running them. |                                             |
+| `--debug`            | Print every command and every message from the Rust agent.                   |                                             |
+| `--version`          | Print the version.                                                           |                                             |
 
-```
-uvx ruff check .
-uvx ruff format --check .
-uvx --python 3.13 pytest
-script/xtcscope --help      # first run fetches qq through uv
-```
+When there are several GRO or XTC files, xtcscope lists them, newest first, with their sizes and atom counts, and asks which one to use. Files it can't use (empty, not an XTC, not a valid GRO) are skipped with a warning.
 
-Installers:
+### Viewers
 
-```
-shellcheck install/*.sh install/tests/*.sh
-bash install/tests/run.sh
-```
+Any program that loads a structure and a trajectory given as `<command> <gro> <xtc>` works:
 
-## Releasing
+| Viewer  | `--viewer`                       |
+| ------- | -------------------------------- |
+| VMD 1.9 | `vmd` (the default)              |
+| VMD 2   | the command you start VMD 2 with |
+| ViaMD   | `viamd`                          |
 
-1. Set `version` in `agent/Cargo.toml` (e.g. `0.1.0`, or `0.1.0-alpha.1` for a
-   pre-release), run `cargo build` in `agent/` to update `Cargo.lock`, commit and
-   push.
-2. On GitHub, draft a new release with a new tag `v<version>` on that commit,
-   tick "Set as a pre-release" for versions with a suffix, and publish it.
+To change the default for good, set `XTCSCOPE_VIEWER` in your `.bashrc`, e.g. `export XTCSCOPE_VIEWER=viamd`.
 
-Publishing triggers the release workflow. It fails unless the tag matches
-`agent/Cargo.toml`. It builds a static `x86_64-unknown-linux-musl` agent, fills
-the version and repository into the script and installers, smoke-tests the
-installer, attaches the tarball, both installers and `sha256sums.txt` to the
-release. Re-running the workflow replaces the attached files.
+### Exit codes
+
+| Code | Meaning                                                                                           |
+| ---- | ------------------------------------------------------------------------------------------------- |
+| 0    | Done: the viewer was closed.                                                                      |
+| 1    | Unexpected error (a bug; please report it).                                                       |
+| 2    | Invalid arguments.                                                                                |
+| 3    | No job found: unknown ID, or no qq job in the current directory.                                  |
+| 4    | The job has no working directory, or it is not accessible on the node.                            |
+| 5    | The input directory is not accessible, no usable GRO or XTC file, or a named file does not exist. |
+| 6    | The GRO and XTC have different atom counts, or a file is not readable.                            |
+| 7    | The SSH connection to the node failed.                                                            |
+| 8    | The agent failed: not installed, an error, or an incomplete copy.                                 |
+| 9    | The viewer was not found or could not be started.                                                 |
+| 130  | Interrupted (Ctrl-C).                                                                             |
+
+## Limitations
+
+- **Does not follow a running simulation.** xtcscope copies the last frames once and doesn't follow the job. To see newer frames, run it again.
+- **The newest frame may be missing.** A frame mdrun is still writing is skipped, and mdrun writes its output in bursts, so the file on the node can lag the simulation by minutes.
+- **The GRO comes from the input directory.** Its atoms must match the XTC's exactly. A job that writes only some atoms (`compressed-x-grps`) needs a matching GRO in its input directory; files created during the run, such as `confout.gro`, can't be used.
+
+## Troubleshooting
+
+| Message                                             | What to do                                                                   |
+| --------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `xtcscope-agent is not installed on <node>`         | Run the installer; it installs the agent into Robox home too.                |
+| `Several XTC files ...; choose one with --xtc NAME` | Without a terminal to ask on, name the file with `--xtc` (or `--gro`).       |
+| `... has N atoms but ... has M`                     | The GRO and the XTC describe different atoms.                                |
+| `Viewer '...' was not found`                        | Install the viewer, or point `--viewer` or `XTCSCOPE_VIEWER` at its command. |
+
+`--debug` shows every SSH command and every message from the agent, which usually tells where things went wrong.

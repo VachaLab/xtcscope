@@ -2,10 +2,10 @@
 
 ## Unreleased
 
-- Releases: `release.yml` builds a static musl agent on version tags, checks the
-  tag against `agent/Cargo.toml`, fills version and repository into the script
-  and installers, smoke-tests the installer and publishes the files with
-  checksums (suffixed versions as pre-releases).
+- Releases: publishing a GitHub release runs `release.yml`, which checks the
+  tag against `agent/Cargo.toml`, builds a static musl agent, fills version and
+  repository into the script and installers, smoke-tests the installer, and
+  attaches the files with checksums to the release.
 - Installers: `xtcscope-install.sh <home> <url>` and `xtcscope-robox-install.sh`
   (desktop and cluster homes); same version left alone, no startup files edited,
   an existing non-installation `~/xtcscope` refused; tests in `install/tests`.

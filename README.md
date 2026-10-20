@@ -11,12 +11,12 @@ network.
 > **Status:** under development (milestone 3: releases and installers). Not
 > usable end to end yet.
 
-## Installation (robox)
+## Installing on Robox
 
 Each GitHub release has an installer for your desktop and the compute nodes:
 
 ```
-bash <(curl -fsSL https://github.com/<owner>/<repo>/releases/download/vX.Y.Z/xtcscope-robox-install.sh)
+bash <(curl -fsSL https://github.com/VachaLab/xtcscope/releases/download/vX.Y.Z/xtcscope-robox-install.sh)
 ```
 
 It installs `xtcscope/` (the `xtcscope` script, the `xtcscope-agent` binary and
@@ -84,11 +84,14 @@ bash install/tests/run.sh
 ## Releasing
 
 1. Set `version` in `agent/Cargo.toml` (e.g. `0.1.0`, or `0.1.0-alpha.1` for a
-   pre-release) and run `cargo build` in `agent/` to update `Cargo.lock`.
-2. Commit, then tag and push: `git tag v0.1.0 && git push origin v0.1.0`.
+   pre-release), run `cargo build` in `agent/` to update `Cargo.lock`, commit and
+   push.
+2. On GitHub, draft a new release with a new tag `v<version>` on that commit,
+   tick "Set as a pre-release" for versions with a suffix, and publish it.
 
-The release workflow fails unless the tag matches `agent/Cargo.toml`. It builds a
-static `x86_64-unknown-linux-musl` agent, fills the version and repository into
-the script and installers, smoke-tests the installer, and publishes the tarball,
-both installers and `sha256sums.txt`. Versions with a suffix are published as
-pre-releases.
+Publishing triggers the release workflow. It fails unless the tag matches
+`agent/Cargo.toml`. It builds a static `x86_64-unknown-linux-musl` agent, fills
+the version and repository into the script and installers, smoke-tests the
+installer, attaches the tarball, both installers and `sha256sums.txt` to the
+release, and appends the install command to the release notes. Re-running the
+workflow replaces the attached files.

@@ -1,34 +1,32 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*.*.*"]
+  release:
+    types: [published]
 
 permissions:
   contents: write
 
 jobs:
   release:
-    name: Build and publish
+    name: Build and attach files
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Check that the tag matches the agent version
         run: |
-          tag="${GITHUB_REF_NAME#v}"
+          version="${TAG#v}"
           cargo_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' agent/Cargo.toml | head -n 1)"
-          if [ "$tag" != "$cargo_version" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match version ${cargo_version} in agent/Cargo.toml"
+          if [ "$version" != "$cargo_version" ]; then
+            echo "::error::Tag ${TAG} does not match version ${cargo_version} in agent/Cargo.toml"
             exit 1
           fi
-          echo "VERSION=${tag}" >> "$GITHUB_ENV"
-          # A version with a suffix (0.1.0-alpha.1) is published as a pre-release.
-          if [[ "$tag" == *-* ]]; then
-            echo "PRERELEASE=--prerelease" >> "$GITHUB_ENV"
-          else
-            echo "PRERELEASE=" >> "$GITHUB_ENV"
-          fi
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -78,25 +76,13 @@ jobs:
           test "$("$home/xtcscope/xtcscope-agent" --version)" = "xtcscope-agent ${VERSION}"
           test "$(cat "$home/xtcscope/VERSION")" = "${VERSION}"
 
-      - name: Publish the release
+      - name: Attach the files to the release
         env:
           GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          cat > dist/notes.md <<EOF
-          Install or update on robox (desktop and compute nodes):
-
-          \`\`\`
-          bash <(curl -fsSL https://github.com/${REPO}/releases/download/${GITHUB_REF_NAME}/xtcscope-robox-install.sh)
-          \`\`\`
-
-          See CHANGELOG.md for the changes.
-          EOF
-          # shellcheck disable=SC2086  # PRERELEASE is empty or one flag
-          gh release create "$GITHUB_REF_NAME" \
-            --title "xtcscope ${VERSION}" \
-            --notes-file dist/notes.md \
-            $PRERELEASE \
+          # --clobber: re-running the workflow replaces the files.
+          gh release upload "$TAG" --clobber \
             dist/xtcscope-release.tar.gz \
             dist/xtcscope-install.sh \
             dist/xtcscope-robox-install.sh \

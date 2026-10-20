@@ -58,24 +58,30 @@ HOME_A="$(new_home)"
 [[ -x "${HOME_A}/xtcscope/xtcscope" && -x "${HOME_A}/xtcscope/xtcscope-agent" ]] \
     || fail "executables are not executable"
 [[ "$("${HOME_A}/xtcscope/xtcscope-agent")" == "xtcscope-agent 0.1.0" ]] || fail "agent not runnable"
-[[ "$(cat "${HOME_A}/.bashrc")" == "# my bashrc" ]] || fail ".bashrc was modified"
+grep -q "^# my bashrc$" "${HOME_A}/.bashrc" || fail ".bashrc lost its content"
+[[ "$(grep -c "managed by xtcscope" "${HOME_A}/.bashrc")" == 2 ]] || fail "PATH block not added"
+grep -qF "export PATH=\"\$PATH:${HOME_A}/xtcscope\"" "${HOME_A}/.bashrc" || fail "PATH block has the wrong directory"
 [[ ! -e "${HOME_A}/.profile" && ! -e "${HOME_A}/.bash_profile" ]] || fail "a profile file was created"
-pass "fresh install, executables set, no startup files touched"
+pass "fresh install, executables set, PATH block added, no profile files created"
 
 touch -d '2001-01-01' "${HOME_A}/xtcscope/xtcscope-agent"
+cp "${HOME_A}/.bashrc" "${WORK}/bashrc.before"
 "$GENERIC" "$HOME_A" "file://${WORK}/r1/xtcscope-release.tar.gz" > "${WORK}/out" \
     || fail "re-install exited non-zero"
 grep -q "up to date" "${WORK}/out" || fail "re-install did not report 'up to date'"
 [[ "$(stat -c %Y "${HOME_A}/xtcscope/xtcscope-agent")" == "$(date -d '2001-01-01' +%s)" ]] \
     || fail "re-install replaced files"
-pass "same version is left alone"
+cmp -s "${WORK}/bashrc.before" "${HOME_A}/.bashrc" || fail "re-install changed .bashrc"
+pass "same version is left alone, .bashrc unchanged"
 
 "$GENERIC" "$HOME_A" "file://${WORK}/r2/xtcscope-release.tar.gz" > "${WORK}/out" \
     || fail "upgrade exited non-zero"
 [[ "$(cat "${HOME_A}/xtcscope/VERSION")" == "0.2.0" ]] || fail "upgrade did not replace VERSION"
 grep -q "Replacing xtcscope 0.1.0 with 0.2.0" "${WORK}/out" || fail "upgrade message missing"
 [[ -z "$(find "$HOME_A" -maxdepth 1 -name 'xtcscope.new.*')" ]] || fail "staging directory left behind"
-pass "a different version replaces the installation"
+[[ "$(grep -c "managed by xtcscope (v0.2.0)" "${HOME_A}/.bashrc")" == 2 ]] || fail "PATH block not updated"
+[[ "$(grep -c "managed by xtcscope" "${HOME_A}/.bashrc")" == 2 ]] || fail "old PATH block left behind"
+pass "a different version replaces the installation and its PATH block"
 
 HOME_B="$(new_home)"
 mkdir -p "${HOME_B}/xtcscope/.git"
@@ -84,6 +90,7 @@ if "$GENERIC" "$HOME_B" "file://${WORK}/r1/xtcscope-release.tar.gz" > "${WORK}/o
     fail "installer overwrote a directory that is not an installation"
 fi
 [[ "$(cat "${HOME_B}/xtcscope/README.md")" == "precious" ]] || fail "foreign directory was modified"
+[[ "$(cat "${HOME_B}/.bashrc")" == "# my bashrc" ]] || fail ".bashrc modified although the installation was refused"
 grep -q "is not an xtcscope installation" "${WORK}/out" || fail "refusal message missing"
 pass "a foreign ~/xtcscope (e.g. a git checkout) is refused and untouched"
 
@@ -111,7 +118,7 @@ HOME="$HOME_C" USER="nobody-$$" XTCSCOPE_RELEASE_BASE="file://${WORK}/r1" "$ROBO
 grep -q "Not installed (directory not found): /storage/brno14-ceitec/home/nobody-$$" "${WORK}/out" \
     || fail "missing cluster home not reported"
 grep -q "Run ${HOME_C}/xtcscope/xtcscope to start." "${WORK}/out" || fail "final hint missing"
-[[ "$(cat "${HOME_C}/.bashrc")" == "# my bashrc" ]] || fail "wrapper modified .bashrc"
+grep -q "managed by xtcscope" "${HOME_C}/.bashrc" || fail "wrapper did not add the PATH block"
 pass "wrapper installs into HOME and reports the missing cluster home"
 
 HOME="$HOME_C" USER="nobody-$$" XTCSCOPE_RELEASE_BASE="file://${WORK}/r1" "$ROBOX" > "${WORK}/out" 2>&1 \

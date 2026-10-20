@@ -2,9 +2,10 @@
 # Installs xtcscope on your desktop and on the compute nodes of the robox cluster.
 #
 # Each target home gets an xtcscope/ directory with the xtcscope script, the
-# xtcscope-agent binary and a VERSION file. Shell startup files are never
-# modified: run the script by its full path, ~/xtcscope/xtcscope, or define an
-# alias yourself.
+# xtcscope-agent binary and a VERSION file. The directory is also added to PATH
+# through a block in that home's .bashrc, managed by xtcscope. Running the
+# installer again updates the block only when it changed. Open a new terminal
+# (or run `source ~/.bashrc`) to start using xtcscope.
 #
 # For testing, XTCSCOPE_RELEASE_BASE overrides the URL the release files are
 # downloaded from (e.g. file:///tmp/fake-release).

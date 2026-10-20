@@ -17,10 +17,9 @@ An XTC has no index, so VMD has to read the whole file, which can be gigabytes o
 
 ## Requirements
 
-- Jobs submitted with [qq](https://github.com/VachaLab/qq) (PBS on Robox). Infinity and raw PBS are **not** supported.
-- On your desktop: [uv](https://docs.astral.sh/uv) and SSH access to the compute nodes.
-- A viewer: VMD 1.9, VMD 2, ViaMD, or another program that opens `<command> <gro> <xtc>`.
-- A GRO file in the job's input directory with the same atoms as the XTC.
+- [uv](https://docs.astral.sh/uv) needs to be installed on your desktop.
+- Supports only jobs submitted with [qq](https://github.com/VachaLab/qq). Infinity and raw PBS are **not** supported.
+- You need to have a viewer: VMD 1.9, VMD 2, ViaMD, or another program that opens `<command> <gro> <xtc>`.
 
 ## Installing on Robox
 

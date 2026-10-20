@@ -43,7 +43,7 @@ It installs `xtcscope/` into `$HOME` and into `/storage/brno14-ceitec/home/$USER
 ## Usage
 
 ```bash
-xtcscope [JOB_ID] [--viewer CMD] [--gro NAME] [--xtc NAME] [-n N] [--dry-run] [--debug]
+xtcscope [JOB_ID] [--viewer CMD] [--gro PATH] [--xtc PATH] [-n N] [--dry-run] [--debug]
 ```
 
 Go to the directory you submitted the job from and run
@@ -61,23 +61,24 @@ xtcscope 1234567                    # a job by its ID, from any directory
 xtcscope -n 50                      # the last 50 frames
 xtcscope --viewer viamd             # open in ViaMD
 xtcscope --xtc md_whole.xtc         # pick the XTC without being asked
+xtcscope --xtc run2/md.xtc          # an XTC in a subdirectory of the working directory
 xtcscope --dry-run                  # show what would be fetched and opened
 ```
 
 ### Options
 
-| Option               | Meaning                                                                      | Default                                     |
-| -------------------- | ---------------------------------------------------------------------------- | ------------------------------------------- |
-| `JOB_ID`             | The job to view.                                                             | The newest qq job in the current directory. |
-| `--viewer CMD`       | Command that opens `<gro> <xtc>`; may include options, e.g. `"vmd -nt"`.     | `$XTCSCOPE_VIEWER`, or `vmd`.               |
-| `--gro NAME`         | GRO file in the job's input directory.                                       | The only one, or ask.                       |
-| `--xtc NAME`         | XTC file in the job's working directory.                                     | The only one, or ask.                       |
-| `-n N`, `--frames N` | Number of frames from the end of the XTC; all of them if there are fewer.    | 10                                          |
-| `--dry-run`          | Choose and check the files, then print the commands instead of running them. |                                             |
-| `--debug`            | Print every command and every message from the Rust agent.                   |                                             |
-| `--version`          | Print the version.                                                           |                                             |
+| Option               | Meaning                                                                      | Default                                        |
+| -------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------- |
+| `JOB_ID`             | The job to view.                                                             | The newest qq job in the current directory.    |
+| `--viewer CMD`       | Command that opens `<gro> <xtc>`; may include options, e.g. `"vmd -nt"`.     | `$XTCSCOPE_VIEWER`, or `vmd`.                  |
+| `--gro PATH`         | GRO file, relative to the job's input directory, or absolute.                | The only one in the input directory, or ask.   |
+| `--xtc PATH`         | XTC file on the node, relative to the job's working directory, or absolute.  | The only one in the working directory, or ask. |
+| `-n N`, `--frames N` | Number of frames from the end of the XTC; all of them if there are fewer.    | 10                                             |
+| `--dry-run`          | Choose and check the files, then print the commands instead of running them. |                                                |
+| `--debug`            | Print every command and every message from the Rust agent.                   |                                                |
+| `--version`          | Print the version.                                                           |                                                |
 
-When there are several GRO or XTC files, xtcscope lists them, newest first, with their sizes and atom counts, and asks which one to use. Files it can't use (empty, not an XTC, not a valid GRO) are skipped with a warning.
+When there are several GRO or XTC files, xtcscope lists them, newest first, with their sizes and atom counts, and asks which one to use. Files it can't use (empty, not an XTC, not a valid GRO) are skipped with a warning. Without `--gro` or `--xtc`, only the top level of the directory is searched.
 
 ### Viewers
 
@@ -118,7 +119,7 @@ To change the default for good, set `XTCSCOPE_VIEWER` in your `.bashrc`, e.g. `e
 | Message                                             | What to do                                                                   |
 | --------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `xtcscope-agent is not installed on <node>`         | Run the installer; it installs the agent into Robox home too.                |
-| `Several XTC files ...; choose one with --xtc NAME` | Without a terminal to ask on, name the file with `--xtc` (or `--gro`).       |
+| `Several XTC files ...; choose one with --xtc PATH` | Without a terminal to ask on, name the file with `--xtc` (or `--gro`).       |
 | `... has N atoms but ... has M`                     | The GRO and the XTC describe different atoms.                                |
 | `Viewer '...' was not found`                        | Install the viewer, or point `--viewer` or `XTCSCOPE_VIEWER` at its command. |
 

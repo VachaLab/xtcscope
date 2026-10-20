@@ -43,7 +43,7 @@ def test_full_run(xtcscope, fake_job, capsys):
     assert sum(c[0] == "ssh" and "-M" in c for c in calls) == 1
     assert temp_dirs() == before, "temporary directory removed"
     err = capsys.readouterr().err
-    assert "Fetching 10 frames (0–18 ps, 1.0 kB) from md.xtc" in err
+    assert "Fetching 10 frames (0-18 ps, 1.0 kB) from md.xtc" in err
     assert "Opening conf.gro and md.last7.xtc in viamd" in err
 
 
@@ -99,9 +99,12 @@ def test_connection_lost_during_fetch(xtcscope, fake_job, monkeypatch):
 
 def test_viewer_cannot_start(xtcscope, fake_job, capsys):
     """A viewer that exists but can't be executed is exit 9."""
-    viewer = fake_job.root / "bin" / "viamd"
+    viewer = fake_job.root / "bin" / "broken-viewer"
     viewer.write_text("#!/nonexistent/interpreter\n")
-    assert run_full(xtcscope) == xtcscope.EXIT_VIEWER
+    viewer.chmod(0o755)
+    # An absolute path: given a bare name, exec would skip the broken file
+    # and run the next viewer of that name on PATH, if there is one.
+    assert xtcscope.main(["--viewer", str(viewer)]) == xtcscope.EXIT_VIEWER
     assert "Could not start the viewer" in capsys.readouterr().err
 
 

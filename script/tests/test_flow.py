@@ -82,8 +82,39 @@ def test_viewer_from_environment(xtcscope, fake_job, monkeypatch, capsys):
 
 
 def test_bad_arguments(xtcscope):
-    """Paths, wrong suffixes and -n 0 are argparse errors (exit 2)."""
-    for argv in (["--gro", "dir/conf.gro"], ["--xtc", "md.trr"], ["-n", "0"]):
+    """Wrong suffixes and -n 0 are argparse errors (exit 2)."""
+    for argv in (["--gro", "dir/conf.top"], ["--xtc", "md.trr"], ["-n", "0"]):
         with pytest.raises(SystemExit) as exc:
             xtcscope.main(argv)
         assert exc.value.code == 2
+
+
+def test_paths_relative_to_the_job_directories(xtcscope, fake_job, capsys):
+    """--gro is relative to the input directory, --xtc to the working directory."""
+    (fake_job.input / "eq").mkdir()
+    (fake_job.input / "conf.gro").rename(fake_job.input / "eq" / "conf.gro")
+    (fake_job.work / "run").mkdir()
+    (fake_job.work / "md.xtc").rename(fake_job.work / "run" / "md.xtc")
+    argv = ["--dry-run", "--viewer", "viamd", "--gro", "eq/conf.gro", "--xtc", "run/md.xtc"]
+    assert xtcscope.main(argv) == 0
+    out = capsys.readouterr().out
+    assert f"gro      {fake_job.input / 'eq' / 'conf.gro'} (48213 atoms)" in out
+    assert f"xtc      {fake_job.work / 'run' / 'md.xtc'} (48213 atoms)" in out
+    assert "/md.last10.xtc" in out and "/run/md.last10.xtc" not in out
+
+
+def test_absolute_paths(xtcscope, fake_job, capsys):
+    """Absolute paths are used as they are."""
+    gro = fake_job.input / "conf.gro"
+    xtc = fake_job.work / "md.xtc"
+    argv = ["--dry-run", "--viewer", "viamd", "--gro", str(gro), "--xtc", str(xtc)]
+    assert xtcscope.main(argv) == 0
+    out = capsys.readouterr().out
+    assert f"gro      {gro} (48213 atoms)" in out and f"xtc      {xtc} (48213 atoms)" in out
+
+
+def test_missing_requested_path(xtcscope, fake_job, capsys):
+    """A requested path that does not exist is exit 5, naming the directory."""
+    argv = ["--dry-run", "--viewer", "viamd", "--xtc", "run/md.xtc"]
+    assert xtcscope.main(argv) == xtcscope.EXIT_NO_FILE
+    assert f"There is no run/md.xtc in node42:{fake_job.work}" in capsys.readouterr().err

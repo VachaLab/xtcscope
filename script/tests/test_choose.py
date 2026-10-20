@@ -63,7 +63,7 @@ def test_several_files_without_a_terminal(xtcscope, files):
     with pytest.raises(xtcscope.XtcscopeError) as exc:
         xtcscope.choose("XTC", "node:/w", files, None, ask=None)
     assert exc.value.exit_code == xtcscope.EXIT_NO_FILE
-    assert "--xtc NAME" in str(exc.value)
+    assert "--xtc PATH" in str(exc.value)
 
 
 def test_no_usable_files(xtcscope, files):

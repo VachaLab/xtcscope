@@ -133,3 +133,41 @@ def test_format_ps(xtcscope):
     assert xtcscope.format_ps(0.5) == "0.5"
     assert xtcscope.format_ps(1_000_000.0) == "1000000"
     assert xtcscope.format_ps(12.3456) == "12.346"
+
+
+def test_list_gro_files_requested_path(xtcscope, tmp_path):
+    """A requested path is listed alone, relative to the directory or absolute."""
+    (tmp_path / "eq").mkdir()
+    (tmp_path / "eq" / "conf.gro").write_text("t\n7\n")
+    (tmp_path / "other.gro").write_text("t\n3\n")
+    [only] = xtcscope.list_gro_files(tmp_path, "eq/conf.gro")
+    assert only.name == "eq/conf.gro" and only.natoms == 7
+    absolute = str(tmp_path / "eq" / "conf.gro")
+    assert [c.name for c in xtcscope.list_gro_files(Path("/nonexistent"), absolute)] == [absolute]
+    assert xtcscope.list_gro_files(tmp_path, "eq/missing.gro") == []
+
+
+def test_xtc_listing_command_requested_path(xtcscope, tmp_path):
+    """A requested path is listed alone, relative to the working directory."""
+    import subprocess
+
+    work = tmp_path / "work"
+    (work / "run dir").mkdir(parents=True)
+    (work / "run dir" / "md.xtc").write_bytes(bytes.fromhex("000007cb0000bc55"))
+    (work / "top.xtc").write_bytes(bytes.fromhex("000007cb0000bc55"))
+
+    def listed(requested):
+        """Names listed by the command for `requested`."""
+        command = xtcscope.xtc_listing_command(work, requested)
+        out = subprocess.run(["bash", "-c", command], capture_output=True, text=True).stdout
+        return [c.name for c in xtcscope.parse_xtc_listing(out)]
+
+    assert listed("run dir/md.xtc") == ["run dir/md.xtc"]
+    assert listed(str(work / "top.xtc")) == [str(work / "top.xtc")]
+    assert listed("run dir/missing.xtc") == []
+    assert listed("*.xtc") == [], "a requested name is not a glob"
+
+
+def test_extracted_name_drops_directories(xtcscope):
+    """The local copy is named after the file alone."""
+    assert xtcscope.extracted_name("run/md.xtc", 10) == "md.last10.xtc"

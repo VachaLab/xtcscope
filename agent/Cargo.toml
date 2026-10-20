@@ -1,0 +1,21 @@
+[package]
+name = "xtcscope-agent"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Serves the last frames of a GROMACS XTC trajectory over IMD"
+publish = false
+
+[[bin]]
+name = "xtcscope-agent"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+# panic stays "unwind" (the default): catch_unwind around molly depends on it

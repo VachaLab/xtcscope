@@ -1,0 +1,58 @@
+#!/usr/bin/env -S uv run --quiet --script
+
+"""
+View the last frames of a running GROMACS job in VMD.
+
+The trajectory is read on the job's compute node by xtcscope-agent and streamed
+to VMD on this machine over IMD, through a single SSH connection.
+
+Requires `uv`: https://docs.astral.sh/uv
+"""
+
+# /// script
+# requires-python = ">=3.13"
+# dependencies = [
+#     "qq",
+# ]
+#
+# [tool.uv.sources]
+# qq = { git = "https://github.com/VachaLab/qq.git", tag = "v0.13.0" }
+# ///
+
+import argparse
+import sys
+
+# Replaced with the release version by the release workflow.
+__version__ = "__VERSION__"
+
+
+def version_string() -> str:
+    """Return the version for display; unreleased copies say so."""
+    if __version__.startswith("__"):
+        return "development version"
+    return __version__
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser."""
+    parser = argparse.ArgumentParser(
+        prog="xtcscope",
+        description="View the last frames of a running GROMACS job in VMD.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"xtcscope {version_string()}",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Entry point. Returns the process exit code."""
+    build_parser().parse_args(argv)
+    print("xtcscope: nothing to do yet (milestone 0).", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

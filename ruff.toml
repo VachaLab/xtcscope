@@ -1,0 +1,7 @@
+target-version = "py313"
+line-length = 100
+# the script has no .py extension
+extend-include = ["script/xtcscope"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP"]

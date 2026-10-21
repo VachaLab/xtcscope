@@ -8,6 +8,7 @@ from collections.abc import Callable
 from xtcscope import __version__
 from xtcscope.errors import EXIT_INTERRUPTED, XtcscopeError
 from xtcscope.frontend import run
+from xtcscope.job import ACCESS_AUTO, ACCESS_MODES
 from xtcscope.log import error, set_debug
 
 # frames fetched when -n is not given
@@ -61,6 +62,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Command that opens '<gro> <xtc>', e.g. vmd, vmd2, viamd or 'vmd -nt'. "
             f"Default: $XTCSCOPE_VIEWER, or {DEFAULT_VIEWER}."
+        ),
+    )
+    parser.add_argument(
+        "--access",
+        choices=ACCESS_MODES,
+        default=ACCESS_AUTO,
+        help=(
+            "How to read the job's working directory: directly on this machine, or through "
+            "the job's main node over SSH. auto reads it directly when it exists here and is "
+            "shared storage or the job runs on this machine. Default: auto."
         ),
     )
     parser.add_argument(

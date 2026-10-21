@@ -1,6 +1,6 @@
 """Expected failures and the exit codes they map to."""
 
-# Exit codes.
+# exit codes
 EXIT_OK = 0
 EXIT_BUG = 1
 EXIT_USAGE = 2

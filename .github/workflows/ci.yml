@@ -40,9 +40,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - name: Ruff lint
-        run: uvx ruff check .
+        run: uv run --frozen ruff check .
       - name: Ruff format
-        run: uvx ruff format --check .
+        run: uv run --frozen ruff format --check .
+      - name: Type check
+        run: uv run --frozen ty check
       - name: Pytest
         run: uv run --frozen pytest
 

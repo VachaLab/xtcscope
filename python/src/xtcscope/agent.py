@@ -1,8 +1,10 @@
 """xtcscope-agent: the command that extracts the frames, and reading its output."""
 
 import json
+import os
 import shlex
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,15 +12,45 @@ from pathlib import Path
 from xtcscope.errors import EXIT_AGENT, EXIT_SSH, XtcscopeError
 from xtcscope.files import format_ps, human_size
 from xtcscope.log import debug, info, warn
-from xtcscope.transport import COMMAND_NOT_FOUND, SSH_FAILED, Remote
+from xtcscope.transport import COMMAND_NOT_FOUND, Runner
 
 # the agent on the node; $HOME is expanded by the remote shell
 AGENT = '"$HOME/xtcscope/xtcscope-agent"'
+# overrides where the agent for direct access is looked for (development, tests)
+AGENT_ENV = "XTCSCOPE_AGENT"
 
 
-def extract_command(xtc: Path, frames: int) -> str:
-    """Remote command that writes the last `frames` frames of `xtc` to stdout."""
-    return f"nice -n 19 ionice -c3 {AGENT} extract --xtc {shlex.quote(str(xtc))} --frames {frames}"
+def local_agent_path() -> Path:
+    """
+    The agent to run on this machine for direct access.
+
+    $XTCSCOPE_AGENT if set; next to the executable in a PyInstaller build,
+    where the installer puts it; otherwise ~/xtcscope/xtcscope-agent.
+    """
+    if override := os.environ.get(AGENT_ENV):
+        return Path(override)
+
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent / "xtcscope-agent"
+
+    return Path.home() / "xtcscope" / "xtcscope-agent"
+
+
+def find_local_agent() -> str:
+    """The local agent as a shell word, for `extract_command`; exit 8 if it is missing."""
+    path = local_agent_path()
+    if not (path.is_file() and os.access(path, os.X_OK)):
+        raise XtcscopeError(
+            f"xtcscope-agent is not installed on this machine ({path}); run the installer.",
+            EXIT_AGENT,
+        )
+
+    return shlex.quote(str(path))
+
+
+def extract_command(xtc: Path, frames: int, agent: str = AGENT) -> str:
+    """Shell command that writes the last `frames` frames of `xtc` to stdout."""
+    return f"nice -n 19 ionice -c3 {agent} extract --xtc {shlex.quote(str(xtc))} --frames {frames}"
 
 
 def extracted_name(xtc_name: str, frames: int) -> str:
@@ -51,22 +83,22 @@ def parse_event(line: str) -> dict | None:
     return None
 
 
-def fetch_frames(remote: Remote, xtc: Path, frames: int, destination: Path) -> Fetched:
+def fetch_frames(runner: Runner, command: str, xtc_name: str, destination: Path) -> Fetched:
     """
-    Run the agent over the master connection, saving its stdout to `destination`.
+    Run the agent's extract `command` through `runner`, saving its stdout to `destination`.
 
     Warnings are shown as they arrive. The result is checked: the agent must
     exit 0, report `located` and `done`, and the file must have exactly the
     size both events report.
     """
-    command = remote.command(extract_command(xtc, frames))
-    debug(f"$ {shlex.join(command)} > {destination}")
+    argv = runner.argv(command)
+    debug(f"$ {shlex.join(argv)} > {destination}")
     located = done = failure = None
     other_lines: list[str] = []
     started = time.monotonic()
 
     with destination.open("wb") as out:
-        process = subprocess.Popen(command, stdout=out, stderr=subprocess.PIPE, text=True)
+        process = subprocess.Popen(argv, stdout=out, stderr=subprocess.PIPE, text=True)
         assert process.stderr is not None  # always set, since stderr=PIPE
 
         try:
@@ -74,7 +106,7 @@ def fetch_frames(remote: Remote, xtc: Path, frames: int, destination: Path) -> F
                 event = parse_event(line)
                 if event is None:
                     other_lines.append(line.rstrip("\n"))
-                    debug(f"remote: {line.rstrip()}")
+                    debug(f"stderr: {line.rstrip()}")
                     continue
 
                 debug(f"agent: {line.rstrip()}")
@@ -89,7 +121,7 @@ def fetch_frames(remote: Remote, xtc: Path, frames: int, destination: Path) -> F
                     size = human_size(event["bytes"])
                     info(
                         f"Fetching {event['frames']} frames "
-                        f"({first}-{last} ps, {size}) from {xtc.name}"
+                        f"({first}-{last} ps, {size}) from {Path(xtc_name).name}"
                     )
                 elif kind == "done":
                     done = event
@@ -98,7 +130,7 @@ def fetch_frames(remote: Remote, xtc: Path, frames: int, destination: Path) -> F
 
             code = process.wait()
         except BaseException:
-            # Ctrl-C or SIGTERM: closing SSH makes the agent exit on its next write
+            # Ctrl-C or SIGTERM: closing its stdout makes the agent exit on its next write
             process.terminate()
             process.wait()
             raise
@@ -107,24 +139,24 @@ def fetch_frames(remote: Remote, xtc: Path, frames: int, destination: Path) -> F
 
     if failure is not None:
         raise XtcscopeError(
-            f"The agent on {remote.node} failed: {failure.get('message')} ({failure.get('code')})",
+            f"The agent on {runner.label} failed: {failure.get('message')} ({failure.get('code')})",
             EXIT_AGENT,
         )
 
     if code == COMMAND_NOT_FOUND and any("xtcscope-agent" in line for line in other_lines):
         raise XtcscopeError(
-            f"xtcscope-agent is not installed on {remote.node}; run the installer.", EXIT_AGENT
+            f"xtcscope-agent is not installed on {runner.label}; run the installer.", EXIT_AGENT
         )
 
-    if code == SSH_FAILED:
-        raise XtcscopeError(f"Lost the connection to {remote.node}.", EXIT_SSH)
+    if runner.connection_lost(code):
+        raise XtcscopeError(f"Lost the connection to {runner.label}.", EXIT_SSH)
 
     if code != 0:
         detail = "; ".join(other_lines[-3:]) or "no message"
-        raise XtcscopeError(f"The agent on {remote.node} exited with {code}: {detail}", EXIT_AGENT)
+        raise XtcscopeError(f"The agent on {runner.label} exited with {code}: {detail}", EXIT_AGENT)
 
     if located is None or done is None:
-        raise XtcscopeError(f"The agent on {remote.node} did not report its work.", EXIT_AGENT)
+        raise XtcscopeError(f"The agent on {runner.label} did not report its work.", EXIT_AGENT)
 
     if not (size == located["bytes"] == done["bytes"]):
         raise XtcscopeError(

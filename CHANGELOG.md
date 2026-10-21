@@ -5,6 +5,8 @@
 - xtcscope is now a Python package (`python/`) released as a PyInstaller bundle, built in a manylinux_2_28 container: uv is no longer needed on the machines it runs on. The behaviour is unchanged.
 - The release tarball holds the `xtcscope` executable with its `_internal/` runtime; the installer checks for it.
 - The release workflow checks that the tag matches both `agent/Cargo.toml` and `python/src/xtcscope/__init__.py`, and checks the bundle's glibc floor (2.28).
+- The working directory is read directly, without SSH, when it exists on this machine and is either shared storage or belongs to a job running on this machine. `--access auto|direct|node` overrides the choice; the choice is shown as an INFO line and in `--dry-run`.
+- For direct access, the agent next to the `xtcscope` executable is used (`$XTCSCOPE_AGENT` overrides it).
 
 ## v0.1.0
 

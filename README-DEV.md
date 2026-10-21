@@ -20,10 +20,10 @@ Modules of the package:
 | --- | --- |
 | `cli.py` | options, `main()`, exit handling, signals |
 | `frontend.py` | `run()`: the flow from arguments to the closed viewer |
-| `job.py` | finding the job through qq |
+| `job.py` | finding the job through qq; the access rule (direct or through the node) |
 | `files.py` | GRO and XTC listings, atom counts, size and time formatting |
 | `choose.py` | choosing a file: requested, the only one, or by asking |
-| `transport.py` | the SSH master connection |
+| `transport.py` | running commands here (`LocalRunner`) or on a node over SSH (`SshRunner`) |
 | `agent.py` | the extract command and reading the agent's output |
 | `viewer.py` | checking and running the viewer |
 | `errors.py`, `log.py` | exit codes, `XtcscopeError`, messages |
@@ -66,8 +66,9 @@ Everything runs from `python/`. The tests need neither qq nor a cluster: the job
 
 ```bash
 cd python
-uvx ruff check .
-uvx ruff format --check .
+uv run ruff check .
+uv run ruff format --check .
+uv run ty check
 uv run pytest
 uv run xtcscope --help      # or: uv run python -m xtcscope --help
 ```

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from xtcscope.errors import EXIT_MISMATCH, EXIT_NO_WORK_DIR, EXIT_SSH, XtcscopeError
-from xtcscope.transport import SSH_FAILED, Remote
+from xtcscope.transport import Runner
 
 # XTC magic numbers the agent understands
 XTC_MAGICS = (1995, 2023)
@@ -110,21 +110,21 @@ def parse_xtc_listing(text: str) -> list[Candidate]:
     return sorted(candidates, key=lambda c: c.mtime, reverse=True)
 
 
-def list_xtc_files(remote: Remote, work_dir: Path, requested: str | None = None) -> list[Candidate]:
+def list_xtc_files(runner: Runner, work_dir: Path, requested: str | None = None) -> list[Candidate]:
     """
-    List the XTC files in the job's working directory on the node.
+    List the XTC files in the job's working directory, where `runner` runs commands.
 
     With `requested`, only that file (relative to `work_dir`, or absolute) is listed.
     """
-    result = remote.run(xtc_listing_command(work_dir, requested))
-    if result.returncode == SSH_FAILED:
+    result = runner.run(xtc_listing_command(work_dir, requested))
+    if runner.connection_lost(result.returncode):
         raise XtcscopeError(
-            f"Lost the connection to {remote.node}: {result.stderr.strip()}", EXIT_SSH
+            f"Lost the connection to {runner.label}: {result.stderr.strip()}", EXIT_SSH
         )
 
     if result.returncode != 0:
         raise XtcscopeError(
-            f"Working directory {work_dir} is not accessible on {remote.node}.",
+            f"Working directory {work_dir} is not accessible on {runner.label}.",
             EXIT_NO_WORK_DIR,
         )
 

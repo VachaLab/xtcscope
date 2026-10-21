@@ -95,6 +95,9 @@ class FakeJob:
         self.home = root / "home"
         self.log = root / "calls.log"
         self.agent = self.home / "xtcscope" / "xtcscope-agent"
+        # what the access rule sees: is the working directory shared, and this machine's names
+        self.shared = False
+        self.local_names = ("desktop.example.cz", "desktop")
 
     def calls(self) -> list[list]:
         """Every logged call, in order: ["ssh", ...], ["agent", ...], ["viewer", ...]."""
@@ -102,12 +105,20 @@ class FakeJob:
             return []
         return [json.loads(line) for line in self.log.read_text().splitlines()]
 
+    def ssh_calls(self) -> list[list]:
+        """The argument lists the fake ssh was called with."""
+        return [c[1:] for c in self.calls() if c[0] == "ssh"]
+
 
 @pytest.fixture
 def fake_job(tmp_path, monkeypatch):
     """
     A job on "node42": GRO in the input directory, XTC in the working directory,
     with fake ssh, agent (in $HOME on the "node") and viewer, and qq stubbed out.
+
+    The working directory exists on this machine too, but is neither shared nor
+    on this host, so the access rule picks the node unless a test changes
+    `shared` or `local_names`.
     """
     job = FakeJob(tmp_path)
     write_executable(tmp_path / "bin" / "ssh", FAKE_SSH)
@@ -118,6 +129,7 @@ def fake_job(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_LOG", str(job.log))
     monkeypatch.setenv("FAKE_XTC_HEX", FAKE_XTC.hex())
     monkeypatch.delenv("XTCSCOPE_VIEWER", raising=False)
+    monkeypatch.delenv("XTCSCOPE_AGENT", raising=False)
 
     job.input.mkdir()
     (job.input / "conf.gro").write_text("title\n48213\n")
@@ -125,8 +137,10 @@ def fake_job(tmp_path, monkeypatch):
     (job.work / "md.xtc").write_bytes(FAKE_XTC)
 
     # replaced where the flow looks them up, so qq is never imported
-    stub = Job("123.pbs", "mdrun", "node42", job.work, job.input)
+    stub = Job("123.pbs", "mdrun", "node42", job.work, job.input, "PBS")
     monkeypatch.setattr("xtcscope.frontend.find_job", lambda job_id: stub)
     monkeypatch.setattr("xtcscope.frontend.ssh_timeout", lambda: 60)
+    monkeypatch.setattr("xtcscope.frontend.work_dir_is_shared", lambda system, path: job.shared)
+    monkeypatch.setattr("xtcscope.frontend.local_host_names", lambda: job.local_names)
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
     return job

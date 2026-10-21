@@ -1,8 +1,8 @@
 #!/bin/bash
 # Installs xtcscope on your desktop and on the compute nodes of the robox cluster.
 #
-# Each target home gets an xtcscope/ directory with the xtcscope script, the
-# xtcscope-agent binary and a VERSION file. The directory is also added to PATH
+# Each target home gets an xtcscope/ directory with the xtcscope executable and
+# its _internal/ runtime, the xtcscope-agent binary and a VERSION file. The directory is also added to PATH
 # through a block in that home's .bashrc, managed by xtcscope. Running the
 # installer again updates the block only when it changed. Open a new terminal
 # (or run `source ~/.bashrc`) to start using xtcscope.
@@ -89,11 +89,7 @@ for FAILED in "${FAILED_HOMES[@]+"${FAILED_HOMES[@]}"}"; do
     warn "Installation failed: ${FAILED}"
 done
 
-if ! command -v uv >/dev/null 2>&1; then
-    warn "uv was not found on this machine; the xtcscope script needs it: https://docs.astral.sh/uv"
-fi
-
 if [[ ${#FAILED_HOMES[@]} -gt 0 ]]; then
     exit 1
 fi
-info "Done. Run ${HOME}/xtcscope/xtcscope to start."
+info "Done. Open a new terminal (or run 'source ~/.bashrc') and run xtcscope."

@@ -7,26 +7,48 @@ on:
 permissions:
   contents: write
 
+env:
+  TAG: ${{ github.event.release.tag_name }}
+
 jobs:
-  release:
-    name: Build and attach files
+  version:
+    name: Check versions
     runs-on: ubuntu-latest
-    env:
-      TAG: ${{ github.event.release.tag_name }}
+    outputs:
+      version: ${{ steps.check.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.release.tag_name }}
 
-      - name: Check that the tag matches the agent version
+      - name: Check that the tag matches the agent and Python versions
+        id: check
         run: |
           version="${TAG#v}"
           cargo_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' agent/Cargo.toml | head -n 1)"
+          python_version="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' python/src/xtcscope/__init__.py)"
+          status=0
           if [ "$version" != "$cargo_version" ]; then
             echo "::error::Tag ${TAG} does not match version ${cargo_version} in agent/Cargo.toml"
-            exit 1
+            status=1
           fi
-          echo "VERSION=${version}" >> "$GITHUB_ENV"
+          if [ "$version" != "$python_version" ]; then
+            echo "::error::Tag ${TAG} does not match version ${python_version} in python/src/xtcscope/__init__.py"
+            status=1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+  agent:
+    name: Build the static agent
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -35,7 +57,7 @@ jobs:
       - name: Install musl tools
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
-      - name: Build the static agent
+      - name: Build
         working-directory: agent
         run: cargo build --release --locked --target x86_64-unknown-linux-musl
 
@@ -46,27 +68,76 @@ jobs:
           file "$bin" | grep -Eq 'statically linked|static-pie linked'
           test "$("$bin" --version)" = "xtcscope-agent ${VERSION}"
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent
+          path: agent/target/x86_64-unknown-linux-musl/release/xtcscope-agent
+          if-no-files-found: error
+
+  bundle:
+    name: Build the PyInstaller bundle
+    needs: version
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build and check the bundle
+        run: python/build-bundle.sh "${{ needs.version.outputs.version }}"
+
+      # A tarball keeps the executable bits, which upload-artifact drops.
+      - name: Pack the bundle
+        run: tar -C python/dist -cf bundle.tar xtcscope
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle
+          path: bundle.tar
+          if-no-files-found: error
+
+  assemble:
+    name: Assemble and attach the files
+    needs: [version, agent, bundle]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
       - name: Assemble the release files
         env:
           REPO: ${{ github.repository }}
         run: |
+          mkdir -p dist/pkg
+          tar -C dist/pkg -xf artifacts/bundle/bundle.tar
           pkg=dist/pkg/xtcscope
-          mkdir -p "$pkg"
-          cp agent/target/x86_64-unknown-linux-musl/release/xtcscope-agent "$pkg/"
-          sed "s/__VERSION__/${VERSION}/g" script/xtcscope > "$pkg/xtcscope"
+          cp artifacts/agent/xtcscope-agent "$pkg/"
           echo "$VERSION" > "$pkg/VERSION"
           chmod 755 "$pkg/xtcscope" "$pkg/xtcscope-agent"
           tar -C dist/pkg -czf dist/xtcscope-release.tar.gz xtcscope
-          for f in install/xtcscope-install.sh install/xtcscope-robox-install.sh; do
+          for f in install/*.sh; do
             out="dist/$(basename "$f")"
             sed -e "s/__VERSION__/${VERSION}/g" -e "s|__REPO__|${REPO}|g" "$f" > "$out"
             chmod 755 "$out"
           done
-          if grep -l '__VERSION__\|__REPO__' dist/*.sh "$pkg/xtcscope"; then
+          if grep -l '__VERSION__\|__REPO__' dist/*.sh; then
             echo "::error::Placeholders left in the files above"
             exit 1
           fi
-          (cd dist && sha256sum xtcscope-release.tar.gz xtcscope-install.sh xtcscope-robox-install.sh > sha256sums.txt)
+          (cd dist && sha256sum -- xtcscope-release.tar.gz *.sh > sha256sums.txt)
           cat dist/sha256sums.txt
 
       - name: Smoke-test the installers
@@ -74,6 +145,7 @@ jobs:
           home="$(mktemp -d)"
           HOME="$home" XTCSCOPE_RELEASE_BASE="file://${PWD}/dist" dist/xtcscope-robox-install.sh
           test "$("$home/xtcscope/xtcscope-agent" --version)" = "xtcscope-agent ${VERSION}"
+          test "$("$home/xtcscope/xtcscope" --version)" = "xtcscope ${VERSION}"
           test "$(cat "$home/xtcscope/VERSION")" = "${VERSION}"
 
       - name: Attach the files to the release
@@ -84,6 +156,5 @@ jobs:
           # --clobber: re-running the workflow replaces the files.
           gh release upload "$TAG" --clobber \
             dist/xtcscope-release.tar.gz \
-            dist/xtcscope-install.sh \
-            dist/xtcscope-robox-install.sh \
+            dist/*.sh \
             dist/sha256sums.txt

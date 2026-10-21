@@ -31,6 +31,8 @@ make_release() {
     printf '#!/bin/sh\necho "xtcscope %s"\n' "$version" > "${dir}/src/xtcscope/xtcscope"
     printf '#!/bin/sh\necho "xtcscope-agent %s"\n' "$version" > "${dir}/src/xtcscope/xtcscope-agent"
     echo "$version" > "${dir}/src/xtcscope/VERSION"
+    mkdir -p "${dir}/src/xtcscope/_internal"
+    echo "runtime" > "${dir}/src/xtcscope/_internal/base_library.zip"
     chmod 644 "${dir}/src/xtcscope/xtcscope" "${dir}/src/xtcscope/xtcscope-agent"
     tar -C "${dir}/src" -czf "${dir}/xtcscope-release.tar.gz" xtcscope
     cp "${INSTALL_DIR}/xtcscope-install.sh" "${dir}/"
@@ -58,6 +60,7 @@ HOME_A="$(new_home)"
 [[ -x "${HOME_A}/xtcscope/xtcscope" && -x "${HOME_A}/xtcscope/xtcscope-agent" ]] \
     || fail "executables are not executable"
 [[ "$("${HOME_A}/xtcscope/xtcscope-agent")" == "xtcscope-agent 0.1.0" ]] || fail "agent not runnable"
+[[ -f "${HOME_A}/xtcscope/_internal/base_library.zip" ]] || fail "_internal/ not installed"
 grep -q "^# my bashrc$" "${HOME_A}/.bashrc" || fail ".bashrc lost its content"
 [[ "$(grep -c "managed by xtcscope" "${HOME_A}/.bashrc")" == 2 ]] || fail "PATH block not added"
 grep -qF "export PATH=\"\$PATH:${HOME_A}/xtcscope\"" "${HOME_A}/.bashrc" || fail "PATH block has the wrong directory"
@@ -94,6 +97,16 @@ fi
 grep -q "is not an xtcscope installation" "${WORK}/out" || fail "refusal message missing"
 pass "a foreign ~/xtcscope (e.g. a git checkout) is refused and untouched"
 
+make_release "0.3.0" "${WORK}/r3"
+rm -rf "${WORK}/r3/src/xtcscope/_internal"
+tar -C "${WORK}/r3/src" -czf "${WORK}/r3/xtcscope-release.tar.gz" xtcscope
+if "$GENERIC" "$HOME_A" "file://${WORK}/r3/xtcscope-release.tar.gz" > "${WORK}/out" 2>&1; then
+    fail "a tarball without _internal/ was installed"
+fi
+grep -q "has no xtcscope/_internal/" "${WORK}/out" || fail "missing _internal/ not reported"
+[[ "$(cat "${HOME_A}/xtcscope/VERSION")" == "0.2.0" ]] || fail "incomplete tarball changed the installation"
+pass "a tarball without the PyInstaller runtime is refused"
+
 if "$GENERIC" "${WORK}/no-such-home" "file://${WORK}/r1/xtcscope-release.tar.gz" > /dev/null 2>&1; then
     fail "missing target home did not fail"
 fi
@@ -117,7 +130,7 @@ HOME="$HOME_C" USER="nobody-$$" XTCSCOPE_RELEASE_BASE="file://${WORK}/r1" "$ROBO
 [[ "$(cat "${HOME_C}/xtcscope/VERSION")" == "0.1.0" ]] || fail "wrapper did not install into HOME"
 grep -q "Not installed (directory not found): /storage/brno14-ceitec/home/nobody-$$" "${WORK}/out" \
     || fail "missing cluster home not reported"
-grep -q "Run ${HOME_C}/xtcscope/xtcscope to start." "${WORK}/out" || fail "final hint missing"
+grep -q "Done. Open a new terminal" "${WORK}/out" || fail "final hint missing"
 grep -q "managed by xtcscope" "${HOME_C}/.bashrc" || fail "wrapper did not add the PATH block"
 pass "wrapper installs into HOME and reports the missing cluster home"
 

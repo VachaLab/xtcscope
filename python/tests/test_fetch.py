@@ -8,11 +8,13 @@ import time
 from pathlib import Path
 
 from conftest import FAKE_XTC
+from xtcscope.cli import main
+from xtcscope.errors import EXIT_AGENT, EXIT_INTERRUPTED, EXIT_SSH, EXIT_VIEWER
 
 
-def run_full(xtcscope, *extra):
+def run_full(*extra):
     """Run xtcscope without --dry-run, with the fake viamd as the viewer."""
-    return xtcscope.main(["--viewer", "viamd", *extra])
+    return main(["--viewer", "viamd", *extra])
 
 
 def temp_dirs():
@@ -20,11 +22,11 @@ def temp_dirs():
     return set(Path(tempfile.gettempdir()).glob("xtcscope-*"))
 
 
-def test_full_run(xtcscope, fake_job, capsys):
+def test_full_run(fake_job, capsys):
     """Frames are fetched over the master connection, which is closed before the
     viewer opens the GRO and the complete XTC; everything is removed afterwards."""
     before = temp_dirs()
-    assert run_full(xtcscope, "-n", "7") == 0
+    assert run_full("-n", "7") == 0
 
     calls = fake_job.calls()
     kinds = [c[0] for c in calls]
@@ -47,75 +49,75 @@ def test_full_run(xtcscope, fake_job, capsys):
     assert "Opening conf.gro and md.last7.xtc in viamd" in err
 
 
-def test_warnings_are_shown(xtcscope, fake_job, monkeypatch, capsys):
+def test_warnings_are_shown(fake_job, monkeypatch, capsys):
     """Agent warnings become WARN lines; the run still succeeds."""
     monkeypatch.setenv("FAKE_AGENT_MODE", "warn")
-    assert run_full(xtcscope) == 0
+    assert run_full() == 0
     assert "WARN    unexpected data after the last frame (trailing_data)" in capsys.readouterr().err
 
 
-def test_other_stderr_lines_are_ignored(xtcscope, fake_job, monkeypatch, capsys):
+def test_other_stderr_lines_are_ignored(fake_job, monkeypatch, capsys):
     """Non-JSON lines on stderr (from ssh, say) don't disturb a successful run."""
     monkeypatch.setenv("FAKE_AGENT_MODE", "noise")
-    assert run_full(xtcscope) == 0
+    assert run_full() == 0
 
 
-def test_agent_error(xtcscope, fake_job, monkeypatch, capsys):
+def test_agent_error(fake_job, monkeypatch, capsys):
     """An error event from the agent is exit 8 with its message; no viewer."""
     monkeypatch.setenv("FAKE_AGENT_MODE", "error")
-    assert run_full(xtcscope) == xtcscope.EXIT_AGENT
+    assert run_full() == EXIT_AGENT
     assert "the first frame's header is invalid (xtc_invalid)" in capsys.readouterr().err
     assert not any(c[0] == "viewer" for c in fake_job.calls())
 
 
-def test_agent_not_installed(xtcscope, fake_job, capsys):
+def test_agent_not_installed(fake_job, capsys):
     """A missing agent (nice exits 127) says to run the installer."""
     fake_job.agent.unlink()
-    assert run_full(xtcscope) == xtcscope.EXIT_AGENT
+    assert run_full() == EXIT_AGENT
     assert "xtcscope-agent is not installed on node42" in capsys.readouterr().err
 
 
-def test_agent_crash(xtcscope, fake_job, monkeypatch, capsys):
+def test_agent_crash(fake_job, monkeypatch, capsys):
     """An agent that dies without an event: exit 8 with what it printed."""
     monkeypatch.setenv("FAKE_AGENT_MODE", "crash")
-    assert run_full(xtcscope) == xtcscope.EXIT_AGENT
+    assert run_full() == EXIT_AGENT
     err = capsys.readouterr().err
     assert "exited with 139" in err and "Segmentation fault" in err
 
 
-def test_incomplete_file(xtcscope, fake_job, monkeypatch, capsys):
+def test_incomplete_file(fake_job, monkeypatch, capsys):
     """A file shorter than the agent announced is exit 8; no viewer."""
     monkeypatch.setenv("FAKE_AGENT_MODE", "short")
-    assert run_full(xtcscope) == xtcscope.EXIT_AGENT
+    assert run_full() == EXIT_AGENT
     assert "incomplete" in capsys.readouterr().err
     assert not any(c[0] == "viewer" for c in fake_job.calls())
 
 
-def test_connection_lost_during_fetch(xtcscope, fake_job, monkeypatch):
+def test_connection_lost_during_fetch(fake_job, monkeypatch):
     """ssh failing during the extract is exit 7."""
     monkeypatch.setenv("FAKE_SSH_DROP", "1")
-    assert run_full(xtcscope) == xtcscope.EXIT_SSH
+    assert run_full() == EXIT_SSH
 
 
-def test_viewer_cannot_start(xtcscope, fake_job, capsys):
+def test_viewer_cannot_start(fake_job, capsys):
     """A viewer that exists but can't be executed is exit 9."""
     viewer = fake_job.root / "bin" / "broken-viewer"
     viewer.write_text("#!/nonexistent/interpreter\n")
     viewer.chmod(0o755)
-    # An absolute path: given a bare name, exec would skip the broken file
-    # and run the next viewer of that name on PATH, if there is one.
-    assert xtcscope.main(["--viewer", str(viewer)]) == xtcscope.EXIT_VIEWER
+    # an absolute path: given a bare name, exec would skip the broken file
+    # and run the next viewer of that name on PATH, if there is one
+    assert main(["--viewer", str(viewer)]) == EXIT_VIEWER
     assert "Could not start the viewer" in capsys.readouterr().err
 
 
-def test_viewer_exit_code_is_only_a_warning(xtcscope, fake_job, monkeypatch, capsys):
+def test_viewer_exit_code_is_only_a_warning(fake_job, monkeypatch, capsys):
     """A viewer exiting non-zero is reported, but the run counts as done."""
     monkeypatch.setenv("FAKE_VIEWER_EXIT", "3")
-    assert run_full(xtcscope) == 0
+    assert run_full() == 0
     assert "The viewer exited with code 3" in capsys.readouterr().err
 
 
-def test_ctrl_c_during_fetch(xtcscope, fake_job, monkeypatch):
+def test_ctrl_c_during_fetch(fake_job, monkeypatch):
     """Ctrl-C while the agent runs: the agent is stopped, exit 130, nothing left."""
     pid_file = fake_job.root / "agent.pid"
     monkeypatch.setenv("FAKE_AGENT_MODE", "sleep")
@@ -131,7 +133,7 @@ def test_ctrl_c_during_fetch(xtcscope, fake_job, monkeypatch):
 
     threading.Thread(target=interrupt, daemon=True).start()
     started = time.monotonic()
-    assert run_full(xtcscope) == xtcscope.EXIT_INTERRUPTED
+    assert run_full() == EXIT_INTERRUPTED
     assert time.monotonic() - started < 10
 
     agent_pid = int(pid_file.read_text())

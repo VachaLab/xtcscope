@@ -30,9 +30,12 @@ jobs:
       - name: Test
         run: cargo test --locked
 
-  script:
-    name: Script (Python)
+  python:
+    name: Python
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -41,7 +44,20 @@ jobs:
       - name: Ruff format
         run: uvx ruff format --check .
       - name: Pytest
-        run: uvx --python 3.13 pytest
+        run: uv run --frozen pytest
+
+  bundle:
+    name: Bundle (PyInstaller)
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Build and check the bundle
+        run: python/build-bundle.sh
 
   installers:
     name: Installers (shell)
@@ -49,6 +65,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: ShellCheck
-        run: shellcheck install/*.sh install/tests/*.sh
+        run: shellcheck install/*.sh install/tests/*.sh python/build-bundle.sh
       - name: Installer tests
         run: bash install/tests/run.sh

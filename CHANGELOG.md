@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- xtcscope is now a Python package (`python/`) released as a PyInstaller bundle, built in a manylinux_2_28 container: uv is no longer needed on the machines it runs on. The behaviour is unchanged.
+- The release tarball holds the `xtcscope` executable with its `_internal/` runtime; the installer checks for it.
+- The release workflow checks that the tag matches both `agent/Cargo.toml` and `python/src/xtcscope/__init__.py`, and checks the bundle's glibc floor (2.28).
+
 ## v0.1.0
 
 First release.

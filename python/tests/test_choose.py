@@ -2,11 +2,15 @@
 
 import pytest
 
+from xtcscope.choose import choose
+from xtcscope.errors import EXIT_NO_FILE, XtcscopeError
+from xtcscope.files import Candidate
+
 
 @pytest.fixture
-def files(xtcscope):
+def files():
     """Two usable XTC files and one that can't be used."""
-    C = xtcscope.Candidate
+    C = Candidate
     return [
         C("new.xtc", 10, 300.0, 100),
         C("old.xtc", 10, 100.0, 100),
@@ -14,37 +18,37 @@ def files(xtcscope):
     ]
 
 
-def test_requested_name_wins(xtcscope, files):
+def test_requested_name_wins(files):
     """A name from the command line is used without asking."""
-    chosen = xtcscope.choose("XTC", "node:/w", files, "old.xtc", ask=None)
+    chosen = choose("XTC", "node:/w", files, "old.xtc", ask=None)
     assert chosen.name == "old.xtc"
 
 
-def test_requested_name_missing(xtcscope, files):
+def test_requested_name_missing(files):
     """A requested name that doesn't exist is exit 5."""
-    with pytest.raises(xtcscope.XtcscopeError) as exc:
-        xtcscope.choose("XTC", "node:/w", files, "nope.xtc", ask=None)
-    assert exc.value.exit_code == xtcscope.EXIT_NO_FILE
+    with pytest.raises(XtcscopeError) as exc:
+        choose("XTC", "node:/w", files, "nope.xtc", ask=None)
+    assert exc.value.exit_code == EXIT_NO_FILE
     assert "There is no nope.xtc in node:/w" in str(exc.value)
 
 
-def test_requested_name_unusable(xtcscope, files):
+def test_requested_name_unusable(files):
     """A requested file that can't be used says why."""
-    with pytest.raises(xtcscope.XtcscopeError) as exc:
-        xtcscope.choose("XTC", "node:/w", files, "empty.xtc", ask=None)
+    with pytest.raises(XtcscopeError) as exc:
+        choose("XTC", "node:/w", files, "empty.xtc", ask=None)
     assert "empty" in str(exc.value)
 
 
-def test_single_usable_file_is_taken(xtcscope, files, capsys):
+def test_single_usable_file_is_taken(files, capsys):
     """One usable file is chosen automatically; unusable ones are mentioned."""
-    chosen = xtcscope.choose("XTC", "node:/w", files[1:], None, ask=None)
+    chosen = choose("XTC", "node:/w", files[1:], None, ask=None)
     assert chosen.name == "old.xtc"
     err = capsys.readouterr().err
     assert "Using old.xtc" in err
     assert "Ignoring empty.xtc" in err
 
 
-def test_several_files_ask(xtcscope, files):
+def test_several_files_ask(files):
     """Several usable files: the user picks from the usable ones, newest first."""
     seen = []
 
@@ -53,22 +57,22 @@ def test_several_files_ask(xtcscope, files):
         seen.append((kind, [c.name for c in candidates]))
         return 1
 
-    chosen = xtcscope.choose("XTC", "node:/w", files, None, ask=ask)
+    chosen = choose("XTC", "node:/w", files, None, ask=ask)
     assert chosen.name == "old.xtc"
     assert seen == [("XTC", ["new.xtc", "old.xtc"])]
 
 
-def test_several_files_without_a_terminal(xtcscope, files):
+def test_several_files_without_a_terminal(files):
     """Without a terminal to ask on, several files are an error naming the option."""
-    with pytest.raises(xtcscope.XtcscopeError) as exc:
-        xtcscope.choose("XTC", "node:/w", files, None, ask=None)
-    assert exc.value.exit_code == xtcscope.EXIT_NO_FILE
+    with pytest.raises(XtcscopeError) as exc:
+        choose("XTC", "node:/w", files, None, ask=None)
+    assert exc.value.exit_code == EXIT_NO_FILE
     assert "--xtc PATH" in str(exc.value)
 
 
-def test_no_usable_files(xtcscope, files):
+def test_no_usable_files(files):
     """Nothing usable is exit 5, naming the place searched."""
-    with pytest.raises(xtcscope.XtcscopeError) as exc:
-        xtcscope.choose("GRO", "/input", files[2:], None, ask=None)
-    assert exc.value.exit_code == xtcscope.EXIT_NO_FILE
+    with pytest.raises(XtcscopeError) as exc:
+        choose("GRO", "/input", files[2:], None, ask=None)
+    assert exc.value.exit_code == EXIT_NO_FILE
     assert "No usable GRO file in /input" in str(exc.value)

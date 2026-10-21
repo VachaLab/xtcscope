@@ -5,7 +5,8 @@
 # Usage: xtcscope-install.sh <target_home> <release_url>
 #
 # The release tarball contains a single directory, xtcscope/, holding the
-# xtcscope script, the xtcscope-agent binary and a VERSION file. An existing
+# xtcscope executable with its _internal/ runtime (a PyInstaller bundle), the
+# xtcscope-agent binary and a VERSION file. An existing
 # installation with the same VERSION is left alone; an older or newer one is
 # replaced. A directory at <target_home>/xtcscope that is not an xtcscope
 # installation (for example a git checkout) is never touched.
@@ -58,6 +59,7 @@ SOURCE_DIR="${TMP_DIR}/xtcscope"
 for file in VERSION xtcscope xtcscope-agent; do
     [[ -f "${SOURCE_DIR}/${file}" ]] || die "The release tarball has no xtcscope/${file}."
 done
+[[ -d "${SOURCE_DIR}/_internal" ]] || die "The release tarball has no xtcscope/_internal/."
 NEW_VERSION="$(cat "${SOURCE_DIR}/VERSION")"
 
 # --------------------------------

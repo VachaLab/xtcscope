@@ -3,13 +3,30 @@
 ## Repository layout
 
 ```
-script/xtcscope     desktop script (Python, run with uv)
-script/tests/       pytest tests for the script (no qq or cluster needed)
-agent/              xtcscope-agent (Rust)
-agent/tests/        integration tests; XTC fixtures generated with molly
-install/            installers and their tests
-.github/workflows/  CI and release
+python/                 the xtcscope command (Python package, uv project)
+python/src/xtcscope/    the package; __init__.py holds the version
+python/tests/           pytest tests (no qq or cluster needed)
+python/xtcscope.spec    PyInstaller spec
+python/build-bundle.sh  builds and checks the PyInstaller bundle
+agent/                  xtcscope-agent (Rust)
+agent/tests/            integration tests; XTC fixtures generated with molly
+install/                installers and their tests
+.github/workflows/      CI and release
 ```
+
+Modules of the package:
+
+| Module | Contents |
+| --- | --- |
+| `cli.py` | options, `main()`, exit handling, signals |
+| `frontend.py` | `run()`: the flow from arguments to the closed viewer |
+| `job.py` | finding the job through qq |
+| `files.py` | GRO and XTC listings, atom counts, size and time formatting |
+| `choose.py` | choosing a file: requested, the only one, or by asking |
+| `transport.py` | the SSH master connection |
+| `agent.py` | the extract command and reading the agent's output |
+| `viewer.py` | checking and running the viewer |
+| `errors.py`, `log.py` | exit codes, `XtcscopeError`, messages |
 
 ## Rust agent
 
@@ -43,27 +60,36 @@ rustup target add x86_64-unknown-linux-musl
 cargo build --release --target x86_64-unknown-linux-musl
 ```
 
-## Python script
+## Python package
 
-The tests need neither qq nor a cluster: qq is replaced by a stub, and fake `ssh`, agent and viewer programs are put on `PATH`. `--dry-run` against a real job needs both.
+Everything runs from `python/`. The tests need neither qq nor a cluster: the job lookup is replaced by a stub, and fake `ssh`, agent and viewer programs are put on `PATH`. `--dry-run` against a real job needs both.
 
 ```bash
+cd python
 uvx ruff check .
 uvx ruff format --check .
-uvx --python 3.13 pytest
-script/xtcscope --help      # first run fetches qq through uv
+uv run pytest
+uv run xtcscope --help      # or: uv run python -m xtcscope --help
 ```
+
+The bundle, as CI and the release build it (in the `quay.io/pypa/manylinux_2_28_x86_64` container there):
+
+```bash
+python/build-bundle.sh      # result in python/dist/xtcscope/
+```
+
+It uses a uv-managed Python, so a local build has the same glibc floor as a release. It fails if anything in the bundle needs a glibc newer than 2.28, if `--version` is wrong, or if the frozen build cannot import qq.
 
 ## Installers
 
 ```bash
-shellcheck install/*.sh install/tests/*.sh
+shellcheck install/*.sh install/tests/*.sh python/build-bundle.sh
 bash install/tests/run.sh
 ```
 
 ## Releasing
 
-1. Set `version` in `agent/Cargo.toml` (e.g. `0.1.0`, or `0.1.0-alpha.1` for a pre-release), run `cargo build` in `agent/` to update `Cargo.lock`, move the CHANGELOG's "Unreleased" entries under the new version, commit and push.
+1. Set the same version in `agent/Cargo.toml` and in `python/src/xtcscope/__init__.py` (e.g. `0.2.0`, or `0.2.0-alpha.1` for a pre-release). Run `cargo build` in `agent/` and `uv lock` in `python/` to update the lock files, move the CHANGELOG's "Unreleased" entries under the new version, commit and push.
 2. On GitHub, draft a new release with a new tag `v<version>` on that commit, and publish it.
 
-Publishing triggers the release workflow. It fails unless the tag matches `agent/Cargo.toml`. It builds a static `x86_64-unknown-linux-musl` agent, fills the version and repository into the script and installers, smoke-tests the installer, and attaches the tarball, both installers and `sha256sums.txt` to the release. Re-running the workflow replaces the attached files.
+Publishing triggers the release workflow. It fails unless the tag matches both versions. It builds a static `x86_64-unknown-linux-musl` agent and the PyInstaller bundle (with `build-bundle.sh`, in the manylinux container) in parallel, puts both into the tarball, fills the version and repository into the installers, smoke-tests the installer, and attaches the tarball, every installer and `sha256sums.txt` to the release. Re-running the workflow replaces the attached files.

@@ -1,7 +1,5 @@
-"""Shared fixtures: the script as a module, and a fake job with fake ssh, agent and viewer."""
+"""Shared fixtures: a fake job with fake ssh, agent and viewer."""
 
-import importlib.machinery
-import importlib.util
 import json
 import os
 import sys
@@ -10,13 +8,13 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parent.parent / "xtcscope"
+from xtcscope.job import Job
 
-# Bytes the fake agent "extracts": an XTC header for 48213 atoms, then filler.
+# bytes the fake agent "extracts": an XTC header for 48213 atoms, then filler
 FAKE_XTC = bytes.fromhex("000007cb0000bc55") + bytes(range(256)) * 4
 
-# Logs its arguments; the master connection and -O exit just succeed; a remote
-# command replaces this process with bash, so terminating ssh stops the agent.
+# logs its arguments; the master connection and -O exit just succeed; a remote
+# command replaces this process with bash, so terminating ssh stops the agent
 FAKE_SSH = """\
 #!{python}
 import json, os, sys
@@ -34,7 +32,7 @@ if os.environ.get("FAKE_SSH_DROP") and "extract" in args[-1]:
 os.execvp("bash", ["bash", "-c", args[-1]])
 """
 
-# Behaves like `xtcscope-agent extract` according to FAKE_AGENT_MODE.
+# behaves like `xtcscope-agent extract` according to FAKE_AGENT_MODE
 FAKE_AGENT = """\
 #!{python}
 import json, os, sys, time
@@ -66,7 +64,7 @@ sys.stdout.flush()
 event(event="done", bytes=claimed)
 """
 
-# Records its arguments and the size of the XTC it was given.
+# records its arguments and the size of the XTC it was given
 FAKE_VIEWER = """\
 #!{python}
 import json, os, sys
@@ -77,21 +75,6 @@ with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(json.dumps(["viewer", *sys.argv[1:], size, same]) + "\\n")
 sys.exit(int(os.environ.get("FAKE_VIEWER_EXIT", "0")))
 """
-
-
-def load_script():
-    """Import `script/xtcscope` (which has no .py suffix) as a fresh module."""
-    loader = importlib.machinery.SourceFileLoader("xtcscope_script", str(SCRIPT))
-    spec = importlib.util.spec_from_loader(loader.name, loader)
-    module = importlib.util.module_from_spec(spec)
-    loader.exec_module(module)
-    return module
-
-
-@pytest.fixture
-def xtcscope():
-    """The xtcscope script, freshly imported for each test."""
-    return load_script()
 
 
 def write_executable(path: Path, template: str) -> None:
@@ -121,9 +104,11 @@ class FakeJob:
 
 
 @pytest.fixture
-def fake_job(xtcscope, tmp_path, monkeypatch):
-    """A job on "node42": GRO in the input directory, XTC in the working directory,
-    with fake ssh, agent (in $HOME on the "node") and viewer, and qq stubbed out."""
+def fake_job(tmp_path, monkeypatch):
+    """
+    A job on "node42": GRO in the input directory, XTC in the working directory,
+    with fake ssh, agent (in $HOME on the "node") and viewer, and qq stubbed out.
+    """
     job = FakeJob(tmp_path)
     write_executable(tmp_path / "bin" / "ssh", FAKE_SSH)
     write_executable(tmp_path / "bin" / "viamd", FAKE_VIEWER)
@@ -139,8 +124,9 @@ def fake_job(xtcscope, tmp_path, monkeypatch):
     job.work.mkdir()
     (job.work / "md.xtc").write_bytes(FAKE_XTC)
 
-    stub = xtcscope.Job("123.pbs", "mdrun", "node42", job.work, job.input)
-    monkeypatch.setattr(xtcscope, "find_job", lambda job_id: stub)
-    monkeypatch.setattr(xtcscope, "ssh_timeout", lambda: 60)
+    # replaced where the flow looks them up, so qq is never imported
+    stub = Job("123.pbs", "mdrun", "node42", job.work, job.input)
+    monkeypatch.setattr("xtcscope.frontend.find_job", lambda job_id: stub)
+    monkeypatch.setattr("xtcscope.frontend.ssh_timeout", lambda: 60)
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
     return job

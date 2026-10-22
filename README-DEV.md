@@ -40,11 +40,13 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-Try the frame location on a trajectory:
+Try the frame location on a trajectory (offsets, steps and times of the last frames; nothing is decoded):
 
 ```bash
-cargo run --release -- inspect --xtc traj.xtc -n 10 --decode
+cargo run --release -- inspect --xtc traj.xtc -n 10
 ```
+
+The agent never decodes frames, so it has no XTC decoder. molly is only a dev-dependency: its writer makes the test fixtures (real compressed frames), and its reader is the reference the tests compare against.
 
 Extract the last frames by hand (on the compute node, or over SSH):
 

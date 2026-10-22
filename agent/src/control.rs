@@ -46,12 +46,6 @@ pub enum Event<'a> {
         step: u32,
         /// Simulation time, ps.
         time_ps: f32,
-        /// Only with `inspect --decode`.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        natoms: Option<usize>,
-        /// Only with `inspect --decode`: the first atom's position, nm.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        first_position_nm: Option<[f32; 3]>,
     },
     /// Something the user should know about; the agent carries on.
     Warning {

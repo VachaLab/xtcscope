@@ -10,6 +10,7 @@
 - xtcscope ships as a self-contained bundle (PyInstaller, glibc 2.28 or newer): uv is no longer needed.
 - New exit code 10: xtcscope on the `--remote` host failed. Exit codes 4 and 7 also cover `--access direct` and the `--remote` host.
 - An interrupted run leaves no SSH connection open for more than a few minutes.
+- The agent no longer contains an XTC decoder (molly is only used by its tests), and `inspect --decode` is gone. Its output is unchanged.
 
 ## v0.1.0
 

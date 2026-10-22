@@ -1,7 +1,7 @@
 //! xtcscope-agent: copies the last frames of a GROMACS XTC trajectory.
 //!
 //! `extract` writes the last complete frames to stdout as a valid XTC file;
-//! `inspect` only lists (and optionally decodes) them, for debugging.
+//! `inspect` only lists them, for debugging. Frames are never decoded.
 
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
@@ -10,7 +10,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 
 use xtcscope_agent::control::{Event, emit, report};
-use xtcscope_agent::xtc::{Frame, FrameSource, XtcSource, byte_range, copy_frames, open_located};
+use xtcscope_agent::xtc::{byte_range, copy_frames, open_located};
 
 /// Copies the last frames of a GROMACS XTC trajectory.
 ///
@@ -52,9 +52,6 @@ enum Command {
         #[arg(long, short = 'n', default_value_t = 10,
               value_parser = clap::value_parser!(u32).range(1..))]
         frames: u32,
-        /// Also decode each frame and report its atom count and first position.
-        #[arg(long)]
-        decode: bool,
     },
 }
 
@@ -63,11 +60,7 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.command {
         Command::Extract { xtc, frames } => extract(&xtc, frames as usize),
-        Command::Inspect {
-            xtc,
-            frames,
-            decode,
-        } => inspect(&xtc, frames as usize, decode),
+        Command::Inspect { xtc, frames } => inspect(&xtc, frames as usize),
     }
 }
 
@@ -136,37 +129,24 @@ fn extract(path: &Path, n: usize) -> ExitCode {
 }
 
 /// The `inspect` subcommand: print warnings, then one `frame` event per frame.
-fn inspect(path: &Path, n: usize, decode: bool) -> ExitCode {
-    let mut source = match XtcSource::open(path, n) {
-        Ok(source) => source,
+fn inspect(path: &Path, n: usize) -> ExitCode {
+    let (_, located) = match open_located(path, n) {
+        Ok(opened) => opened,
         Err(err) => return fail_emit(err.code(), &err.to_string()),
     };
 
-    for warning in source.warnings() {
+    for warning in &located.warnings {
         emit(&Event::Warning {
             code: warning.code,
             message: &warning.message,
         });
     }
 
-    let infos = source.frames().to_vec();
-    let mut frame = Frame::default();
-    for (i, info) in infos.iter().enumerate() {
-        let (natoms, first_position_nm) = if decode {
-            if let Err(err) = source.read(i, &mut frame) {
-                return fail_emit("xtc_invalid", &format!("{err:#}"));
-            }
-            let p = &frame.positions_nm;
-            (Some(source.natoms()), Some([p[0], p[1], p[2]]))
-        } else {
-            (None, None)
-        };
+    for frame in &located.frames {
         emit(&Event::Frame {
-            offset: info.offset,
-            step: info.step,
-            time_ps: info.time_ps,
-            natoms,
-            first_position_nm,
+            offset: frame.offset,
+            step: frame.step,
+            time_ps: frame.time_ps,
         });
     }
 

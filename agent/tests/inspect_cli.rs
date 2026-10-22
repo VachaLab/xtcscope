@@ -53,9 +53,9 @@ fn lists_the_last_frames() {
     }
 }
 
-/// `--decode` adds the atom count and the first position.
+/// `--decode` is gone: frames are never decoded.
 #[test]
-fn decode_adds_atoms_and_first_position() {
+fn decode_is_not_an_option() {
     let data = make_xtc(Magic::Xtc2023, 200, 4);
     let file = temp_xtc(&data);
     let output = run(&[
@@ -64,13 +64,7 @@ fn decode_adds_atoms_and_first_position() {
         file.path().to_str().unwrap(),
         "--decode",
     ]);
-    assert!(output.status.success());
-    let events = events(&output);
-    assert_eq!(events.len(), 4);
-    for event in &events {
-        assert_eq!(event["natoms"], 200);
-        assert_eq!(event["first_position_nm"].as_array().unwrap().len(), 3);
-    }
+    assert_eq!(output.status.code(), Some(2));
 }
 
 /// Warnings precede the frames and are logged on stderr too.

@@ -15,13 +15,13 @@ name = "xtcscope_agent"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1"
 clap = { version = "4.5", features = ["derive"] }
-molly = "=0.7.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [dev-dependencies]
+# writes real compressed frames for the fixtures, and reads them back as a reference
+molly = "=0.7.0"
 tempfile = "3"
 
 [profile.release]
@@ -29,4 +29,3 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 strip = true
-# panic stays "unwind" (the default): catch_unwind around molly depends on it

@@ -1,7 +1,5 @@
 # Changelog
 
-## Unreleased
-
 ## v0.2.0
 
 - `--remote HOST`: look up the job and extract its frames on `HOST` (any destination `ssh` accepts, such as an alias from `~/.ssh/config`), and view them here, e.g. from a laptop at home. One SSH connection carries the whole run, so a password is asked for at most once. Both machines need the same release: a different version is a warning, an incompatible one exit 10.

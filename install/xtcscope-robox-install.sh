@@ -2,42 +2,53 @@
 # Installs xtcscope on your desktop and on the compute nodes of the robox cluster.
 #
 # Each target home gets an xtcscope/ directory with the xtcscope executable and
-# its _internal/ runtime, the xtcscope-agent binary and a VERSION file. The directory is also added to PATH
-# through a block in that home's .bashrc, managed by xtcscope. Running the
-# installer again updates the block only when it changed. Open a new terminal
-# (or run `source ~/.bashrc`) to start using xtcscope.
+# its _internal/ runtime, the xtcscope-agent binary and a VERSION file. The
+# directory is also added to PATH through a block in that home's .bashrc,
+# managed by xtcscope. Running the installer again updates the block only when
+# it changed. Open a new terminal (or run `source ~/.bashrc`) to start using
+# xtcscope.
 #
 # For testing, XTCSCOPE_RELEASE_BASE overrides the URL the release files are
-# downloaded from (e.g. file:///tmp/fake-release).
+# downloaded from (e.g. file:///tmp/fake-release), and XTCSCOPE_TARGET_HOMES
+# (space-separated) replaces the list of target homes.
 
 set -euo pipefail
 
-# Filled in by the release workflow.
+# filled in by the release workflow
 XTCSCOPE_VERSION="v__VERSION__"
 XTCSCOPE_REPO="__REPO__"
 
-# USER is not set in every shell (e.g. some non-login sessions).
+# the name in this installer's messages
+NAME="xtcscope robox installer"
+
+# >>> target homes
+# USER is not set in every shell (e.g. some non-login sessions)
 USER_NAME="${USER:-$(id -un)}"
 
-# Home directories to install into: this machine's, then the cluster's.
+# home directories to install into: this machine's, then the cluster's
 TARGET_HOMES=(
     "${HOME}"
     "/storage/brno14-ceitec/home/${USER_NAME}"
 )
+# <<< target homes
 
-# Print an informational line.
+if [[ -n "${XTCSCOPE_TARGET_HOMES:-}" ]]; then
+    read -r -a TARGET_HOMES <<< "$XTCSCOPE_TARGET_HOMES"
+fi
+
+# print an informational line
 info() {
-    echo "INFO    [xtcscope robox installer] $*"
+    echo "INFO    [${NAME}] $*"
 }
 
-# Print a warning line.
+# print a warning line
 warn() {
-    echo "WARN    [xtcscope robox installer] $*"
+    echo "WARN    [${NAME}] $*"
 }
 
-# Print an error line and exit 1.
+# print an error line and exit 1
 die() {
-    echo "ERROR   [xtcscope robox installer] $*" >&2
+    echo "ERROR   [${NAME}] $*" >&2
     exit 1
 }
 
@@ -69,7 +80,7 @@ for HOME_DIR in "${TARGET_HOMES[@]}"; do
         MISSING_HOMES+=("$HOME_DIR")
         continue
     fi
-    # The same directory can appear twice, e.g. when run on the cluster itself.
+    # the same directory can appear twice, e.g. $HOME and its storage path on the cluster
     REAL_DIR="$(cd "$HOME_DIR" && pwd -P)"
     if [[ " ${DONE_HOMES[*]-} " == *" ${REAL_DIR} "* ]]; then
         info "Skipping ${HOME_DIR} (same directory as an earlier target)."

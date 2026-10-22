@@ -95,10 +95,14 @@ It uses a uv-managed Python, so a local build has the same glibc floor as a rele
 
 ## Installers
 
+`install/xtcscope-install.sh <home> <release_url>` installs one release into one home. Each cluster has a wrapper (`xtcscope-<cluster>-install.sh`) that downloads it and runs it for every home of that cluster. The wrappers are identical except for their description, their `NAME` and the block between `# >>> target homes` and `# <<< target homes`; the tests check this, so change all of them together. A new cluster is a copy of the desktop wrapper with its own name and homes.
+
 ```bash
 shellcheck install/*.sh install/tests/*.sh python/build-bundle.sh
 bash install/tests/run.sh
 ```
+
+For tests, `XTCSCOPE_RELEASE_BASE` points a wrapper at a local release directory and `XTCSCOPE_TARGET_HOMES` (space-separated) replaces its homes.
 
 ## Releasing
 

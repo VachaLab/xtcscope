@@ -147,4 +147,58 @@ fi
 grep -q "Installation failed: ${HOME_D}" "${WORK}/out" || fail "failed home not reported"
 pass "wrapper exits 1 and names the home when an installation fails"
 
+# --- every cluster wrapper ------------------------------------------------------
+
+CLUSTERS=(desktop robox metacentrum sokar karolina lumi)
+
+# a wrapper without its cluster-specific parts: the description at the top,
+# the NAME line and the target-homes block
+generic_part() {
+    awk '
+        NR == 2 { in_header = 1 }
+        in_header && $0 == "#" { in_header = 0 }
+        in_header { next }
+        /^NAME=/ { next }
+        /^# >>> target homes/ { in_homes = 1 }
+        in_homes { if (/^# <<< target homes/) in_homes = 0; next }
+        { print }
+    ' "$1"
+}
+
+generic_part "$ROBOX" > "${WORK}/robox.generic"
+for cluster in "${CLUSTERS[@]}"; do
+    wrapper="${INSTALL_DIR}/xtcscope-${cluster}-install.sh"
+    [[ -x "$wrapper" ]] || fail "${cluster}: wrapper missing or not executable"
+    grep -q "^NAME=\"xtcscope ${cluster} installer\"$" "$wrapper" || fail "${cluster}: wrong NAME"
+    generic_part "$wrapper" | cmp -s - "${WORK}/robox.generic" \
+        || fail "${cluster}: differs from the robox wrapper outside its cluster-specific parts"
+done
+pass "all wrappers share the robox wrapper's code"
+
+for cluster in "${CLUSTERS[@]}"; do
+    wrapper="${INSTALL_DIR}/xtcscope-${cluster}-install.sh"
+    home="$(new_home)"
+    missing="${WORK}/missing-${cluster}"
+    XTCSCOPE_TARGET_HOMES="${home} ${missing}" XTCSCOPE_RELEASE_BASE="file://${WORK}/r1" \
+        "$wrapper" > "${WORK}/out" 2>&1 || fail "${cluster}: wrapper exited non-zero: $(cat "${WORK}/out")"
+    [[ "$(cat "${home}/xtcscope/VERSION")" == "0.1.0" ]] || fail "${cluster}: not installed"
+    grep -q "\[xtcscope ${cluster} installer\] Not installed (directory not found): ${missing}" \
+        "${WORK}/out" || fail "${cluster}: missing home not reported"
+
+    if HOME="$home" "$wrapper" > "${WORK}/out" 2>&1; then
+        fail "${cluster}: unreleased wrapper ran without XTCSCOPE_RELEASE_BASE"
+    fi
+    grep -q "unreleased copy" "${WORK}/out" || fail "${cluster}: unreleased-copy message missing"
+done
+pass "every wrapper installs into the given homes and refuses to run unreleased"
+
+# the patterns match the wrapper's text, ${USER_NAME} included, literally
+# shellcheck disable=SC2016
+storages="$(grep -c '"/storage/[^/]*/home/${USER_NAME}"' "${INSTALL_DIR}/xtcscope-metacentrum-install.sh")"
+[[ "$storages" == 12 ]] || fail "metacentrum: expected the 12 storages of qq's list, found ${storages}"
+# shellcheck disable=SC2016
+grep -q '"/storage/brno12-cerit/home/${USER_NAME}"' "${INSTALL_DIR}/xtcscope-metacentrum-install.sh" \
+    || fail "metacentrum: brno12-cerit missing"
+pass "the metacentrum wrapper covers qq's storages"
+
 echo "All ${PASSED} installer tests passed."

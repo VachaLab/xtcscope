@@ -2,14 +2,14 @@
 
 ## Unreleased
 
-- xtcscope is now a Python package (`python/`) released as a PyInstaller bundle, built in a manylinux_2_28 container: uv is no longer needed on the machines it runs on. The behaviour is unchanged.
-- The release tarball holds the `xtcscope` executable with its `_internal/` runtime; the installer checks for it.
-- The release workflow checks that the tag matches both `agent/Cargo.toml` and `python/src/xtcscope/__init__.py`, and checks the bundle's glibc floor (2.28).
-- The working directory is read directly, without SSH, when it exists on this machine and is either shared storage or belongs to a job running on this machine. `--access auto|direct|node` overrides the choice; the choice is shown as an INFO line and in `--dry-run`.
-- For direct access, the agent next to the `xtcscope` executable is used (`$XTCSCOPE_AGENT` overrides it).
-- The frontend talks to the job through a backend. The backend also answers internal `xtcscope _backend` commands (`inspect`, `gro`, `fetch`, `close`), versioned by a protocol number, ready for running it on another machine.
-- `--remote HOST`: the job is resolved, its files listed and its frames extracted on `HOST` (any destination `ssh` accepts, e.g. an alias from `~/.ssh/config`), and the GRO and the frames are copied here for the viewer. One SSH connection to `HOST` carries everything, so a password or passphrase is asked for at most once. Messages from `HOST` are tagged with its name. Needs the same xtcscope release on both machines; a different protocol is exit 10, a different version only a warning.
-- The node connection lives in a private socket directory (`$XDG_RUNTIME_DIR/xtcscope` or `/tmp/xtcscope-<uid>`) and expires by itself 120 s after it was last used, so an interrupted run leaves nothing behind for long.
+## v0.2.0
+
+- `--remote HOST`: look up the job and extract its frames on `HOST` (any destination `ssh` accepts, such as an alias from `~/.ssh/config`), and view them here, e.g. from a laptop at home. One SSH connection carries the whole run, so a password is asked for at most once. Both machines need the same release: a different version is a warning, an incompatible one exit 10.
+- The working directory is read directly, without SSH to the compute node, when it exists where the job is looked up and is either shared storage or belongs to a job running on that machine. `--access auto|direct|node` overrides the choice.
+- Installers for Metacentrum, Sokar, Karolina and LUMI, and `xtcscope-desktop-install.sh` for a machine without a batch system. Every installer adds `xtcscope` to `PATH` in `.bashrc`.
+- xtcscope ships as a self-contained bundle (PyInstaller, glibc 2.28 or newer): uv is no longer needed.
+- New exit code 10: xtcscope on the `--remote` host failed. Exit codes 4 and 7 also cover `--access direct` and the `--remote` host.
+- An interrupted run leaves no SSH connection open for more than a few minutes.
 
 ## v0.1.0
 

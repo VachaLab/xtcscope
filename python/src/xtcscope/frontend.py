@@ -13,6 +13,7 @@ from xtcscope.choose import ask_with_rich, choose
 from xtcscope.errors import EXIT_MISMATCH, EXIT_OK, XtcscopeError
 from xtcscope.job import ACCESS_DIRECT
 from xtcscope.log import info
+from xtcscope.remote import RemoteBackend
 from xtcscope.transport import new_run_id
 from xtcscope.viewer import launch_viewer, viewer_argv, viewer_words
 
@@ -20,7 +21,8 @@ from xtcscope.viewer import launch_viewer, viewer_argv, viewer_words
 def run(args: argparse.Namespace) -> int:
     """Run xtcscope with parsed arguments; returns the exit code."""
     words = viewer_words(args.viewer)
-    backend: Backend = LocalBackend(new_run_id())
+    run_id = new_run_id()
+    backend: Backend = RemoteBackend(args.remote, run_id) if args.remote else LocalBackend(run_id)
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="xtcscope-"))
     try:
@@ -29,8 +31,11 @@ def run(args: argparse.Namespace) -> int:
         job, access = inspection.job, inspection.access
 
         ask = ask_with_rich if sys.stdin.isatty() else None
-        gro = choose("GRO", str(job.input_dir), inspection.gro, args.gro, ask)
-        where = str(job.work_dir) if access.mode == ACCESS_DIRECT else f"{job.node}:{job.work_dir}"
+        gro = choose("GRO", backend.location(job.input_dir), inspection.gro, args.gro, ask)
+        if access.mode == ACCESS_DIRECT:
+            where = backend.location(job.work_dir)
+        else:
+            where = f"{job.node}:{job.work_dir}"
         xtc = choose("XTC", where, inspection.xtc, args.xtc, ask)
 
         # both files must describe the same atoms
@@ -51,10 +56,11 @@ def run(args: argparse.Namespace) -> int:
             print(f"node     {job.node}")
             print(f"backend  {backend.label}")
             print(f"access   {access.summary(job.node)}")
-            print(f"gro      {gro_path} ({gro.natoms} atoms)")
+            print(f"gro      {backend.location(gro_path)} ({gro.natoms} atoms)")
             print(f"xtc      {xtc_path} ({xtc.natoms} atoms)")
             print(f"extract  {shlex.join(plan.argv)} > {local_xtc}")
-            print(f"view     {shlex.join(viewer_argv(words, gro_path, local_xtc))}")
+            local_gro = gro_path if args.remote is None else tmp_dir / gro_path.name
+            print(f"view     {shlex.join(viewer_argv(words, local_gro, local_xtc))}")
             return EXIT_OK
 
         # the GRO where the viewer can read it, then the last frames

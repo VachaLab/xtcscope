@@ -30,21 +30,11 @@ class Backend:
     def __init__(self, fake_job):
         """Describe the fake job with the default details."""
         self.fake_job = fake_job
-        self.description = fake_job.root / "job.json"
-        self.describe()
+        self.description = fake_job.describe()
 
     def describe(self, **changes) -> None:
-        """Write the job description the stub serves; `changes` override the defaults."""
-        job = {
-            "job_id": "123.pbs",
-            "name": "mdrun",
-            "node": "node42",
-            "work_dir": str(self.fake_job.work),
-            "input_dir": str(self.fake_job.input),
-            "batch_system": "PBS",
-            "shared": False,
-        }
-        self.description.write_text(json.dumps(job | changes))
+        """Change what the stub serves; `changes` override the defaults."""
+        self.fake_job.describe(**changes)
 
     def __call__(self, *args: str, protocol: int = PROTOCOL) -> subprocess.CompletedProcess:
         """Run one backend command; stdout as bytes, stderr as text."""

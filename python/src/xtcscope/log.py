@@ -12,6 +12,16 @@ def set_debug(enabled: bool) -> None:
     _debug = enabled
 
 
+def debug_enabled() -> bool:
+    """Whether --debug was given."""
+    return _debug
+
+
+def relay(level: str, host: str, message: str) -> None:
+    """Print a message that came from xtcscope on `host`, tagged with its name."""
+    print(f"{level:<8}[{host}] {message}", file=sys.stderr)
+
+
 def info(message: str) -> None:
     """Print an INFO line on stderr."""
     print(f"INFO    {message}", file=sys.stderr)

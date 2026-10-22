@@ -20,6 +20,9 @@ COMMAND_NOT_FOUND = 127
 # seconds an idle node connection outlives the process that opened it, so that
 # `_backend fetch` can reuse the connection `_backend inspect` opened
 NODE_PERSIST = 120
+# seconds an idle connection to a --remote host survives; long enough to choose
+# a file at a prompt, after which the next command reconnects (and may prompt)
+REMOTE_PERSIST = 600
 
 
 class Runner(Protocol):
@@ -123,30 +126,45 @@ def node_ssh_options(timeout: int) -> list[str]:
     ]
 
 
+def remote_ssh_options() -> list[str]:
+    """
+    Options for the master connection to a --remote host: keep-alives only.
+
+    Everything else comes from the user's ~/.ssh/config (aliases, users, keys,
+    ProxyJump, host keys), and password, passphrase and host-key prompts appear
+    on the terminal: ssh reads them from /dev/tty even when stderr is captured.
+    """
+    return ["-o", "ServerAliveInterval=15"]
+
+
 class SshRunner:
     """
-    Runs shell commands on a node over one SSH master connection.
+    Runs shell commands on one host over an SSH master connection.
 
-    The master outlives this object for NODE_PERSIST seconds of idleness, so
-    another process can reuse it through the same control socket.
+    The master outlives this object for `persist` seconds of idleness, so
+    another process can reuse it through the same control socket, and a
+    process that dies without closing it leaves nothing behind for long.
     """
 
     lost_code = SSH_FAILED
 
-    def __init__(self, node: str, control: Path, timeout: Callable[[], int]):
-        """Prepare a connection to `node` through the control socket `control`."""
-        self.label = node
-        self.node = node
+    def __init__(
+        self, destination: str, control: Path, options: Callable[[], list[str]], persist: int
+    ):
+        """Prepare a connection to `destination` through the control socket `control`."""
+        self.label = destination
+        self.destination = destination
         self.control = control
-        # called only when a new connection is opened (it may import qq)
-        self.timeout = timeout
+        # called only when a new connection is opened (the node options import qq)
+        self.options = options
+        self.persist = persist
 
     def is_alive(self) -> bool:
         """Whether a master connection answers on the control socket."""
         if not self.control.exists():
             return False
 
-        command = ["ssh", "-S", str(self.control), "-O", "check", self.node]
+        command = ["ssh", "-S", str(self.control), "-O", "check", self.destination]
         debug(f"$ {shlex.join(command)}")
         return subprocess.run(command, capture_output=True).returncode == 0
 
@@ -159,15 +177,15 @@ class SshRunner:
         self.control.unlink(missing_ok=True)
         command = [
             "ssh",
-            *node_ssh_options(self.timeout()),
+            *self.options(),
             "-o",
-            f"ControlPersist={NODE_PERSIST}",
+            f"ControlPersist={self.persist}",
             "-M",
             "-S",
             str(self.control),
             "-f",
             "-N",
-            self.node,
+            self.destination,
         ]
 
         debug(f"$ {shlex.join(command)}")
@@ -175,14 +193,14 @@ class SshRunner:
         if result.returncode != 0:
             detail = result.stderr.strip().splitlines()
             reason = f": {detail[-1]}" if detail else ""
-            raise XtcscopeError(f"Could not connect to {self.node}{reason}", EXIT_SSH)
+            raise XtcscopeError(f"Could not connect to {self.destination}{reason}", EXIT_SSH)
 
     def argv(self, command: str) -> list[str]:
-        """The local command that runs `command` on the node over the master connection."""
-        return ["ssh", "-S", str(self.control), self.node, command]
+        """The local command that runs `command` on the host over the master connection."""
+        return ["ssh", "-S", str(self.control), self.destination, command]
 
     def run(self, command: str) -> subprocess.CompletedProcess:
-        """Run a shell command on the node and capture its output as text."""
+        """Run a shell command on the host and capture its output as text."""
         argv = self.argv(command)
         debug(f"$ {shlex.join(argv)}")
 
@@ -193,6 +211,6 @@ class SshRunner:
         if not self.control.exists():
             return
 
-        command = ["ssh", "-S", str(self.control), "-O", "exit", self.node]
+        command = ["ssh", "-S", str(self.control), "-O", "exit", self.destination]
         debug(f"$ {shlex.join(command)}")
         subprocess.run(command, capture_output=True)

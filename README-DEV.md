@@ -21,6 +21,7 @@ Modules of the package:
 | `cli.py` | options, `main()`, exit handling, signals; hands `_backend` to `backend.py` |
 | `frontend.py` | `run()`: the flow from arguments to the closed viewer, through a backend |
 | `backend.py` | resolving the job, listing its files, planning the extraction (`LocalBackend`); the `_backend` commands |
+| `remote.py` | `RemoteBackend`: `--remote`, running the `_backend` commands on another host over one SSH connection |
 | `job.py` | finding the job through qq; the access rule (direct or through the node) |
 | `files.py` | GRO and XTC listings, atom counts, size and time formatting |
 | `choose.py` | choosing a file: requested, the only one, or by asking |
@@ -72,6 +73,8 @@ The backend commands can be tried by hand on a machine with qq (`--run` is any 8
 xtcscope _backend inspect --protocol 1 --run abcd1234 <job_id>
 xtcscope _backend close --protocol 1 --run abcd1234 --node <node>
 ```
+
+The remote tests (`tests/test_remote.py`) fake a second host: the fake `ssh` gives each destination its own `$HOME` (`$FAKE_HOSTS`), where a small script runs this checkout's xtcscope with the qq stand-in.
 
 ```bash
 cd python

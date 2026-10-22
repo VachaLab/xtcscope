@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from xtcscope.errors import EXIT_AGENT, EXIT_SSH, XtcscopeError
+from xtcscope.errors import EXIT_AGENT, EXIT_BACKEND, EXIT_SSH, XtcscopeError
 from xtcscope.files import format_ps, human_size
 from xtcscope.log import debug, info, warn
 from xtcscope.transport import COMMAND_NOT_FOUND
@@ -147,6 +147,10 @@ def fetch_frames(plan: FetchPlan, xtc_name: str, destination: Path) -> Fetched:
             raise
 
     size = destination.stat().st_size
+
+    if failure is not None and failure.get("code") == "backend":
+        # the backend failed before the agent started; its error keeps its exit code
+        raise XtcscopeError(str(failure.get("message")), failure.get("exit_code", EXIT_BACKEND))
 
     if failure is not None:
         raise XtcscopeError(

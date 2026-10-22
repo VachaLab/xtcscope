@@ -44,7 +44,14 @@ from xtcscope.job import (
     work_dir_is_shared,
 )
 from xtcscope.log import error, info, set_debug
-from xtcscope.transport import LocalRunner, Runner, SshRunner, socket_dir
+from xtcscope.transport import (
+    NODE_PERSIST,
+    LocalRunner,
+    Runner,
+    SshRunner,
+    node_ssh_options,
+    socket_dir,
+)
 
 # the first argument that selects the backend commands
 BACKEND_COMMAND = "_backend"
@@ -94,7 +101,12 @@ class Inspection:
 
 def node_runner(node: str, run: str) -> SshRunner:
     """The runner for `node`, with this run's control socket."""
-    return SshRunner(node, socket_dir() / f"{run}-node", ssh_timeout)
+
+    def options() -> list[str]:
+        """The node options; qq's timeout is read only when a connection is opened."""
+        return node_ssh_options(ssh_timeout())
+
+    return SshRunner(node, socket_dir() / f"{run}-node", options, NODE_PERSIST)
 
 
 def runner_for(mode: str, node: str, run: str) -> Runner:
@@ -169,6 +181,10 @@ class Backend(Protocol):
     # where the backend runs, for messages and --dry-run
     label: str
 
+    def location(self, path: Path) -> str:
+        """How messages name a path where the backend runs."""
+        ...
+
     def inspect(
         self, job_id: str | None, gro: str | None, xtc: str | None, access: str
     ) -> Inspection:
@@ -192,6 +208,10 @@ class LocalBackend:
     """The backend in this process: no protocol, and the GRO is used where it is."""
 
     label = "this machine"
+
+    def location(self, path: Path) -> str:
+        """A path on this machine, as it is."""
+        return str(path)
 
     def __init__(self, run: str):
         """A backend whose connections are named after the run id `run`."""
@@ -337,7 +357,7 @@ def report_failure(command: str, err: XtcscopeError) -> None:
         )
     elif command == "fetch":
         code = "agent_missing" if err.exit_code == EXIT_AGENT else "backend"
-        event = {"event": "error", "code": code, "message": str(err)}
+        event = {"event": "error", "code": code, "message": str(err), "exit_code": err.exit_code}
         print(json.dumps(event), file=sys.stderr, flush=True)
     else:
         error(str(err))

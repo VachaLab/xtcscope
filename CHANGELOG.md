@@ -8,6 +8,7 @@
 - The working directory is read directly, without SSH, when it exists on this machine and is either shared storage or belongs to a job running on this machine. `--access auto|direct|node` overrides the choice; the choice is shown as an INFO line and in `--dry-run`.
 - For direct access, the agent next to the `xtcscope` executable is used (`$XTCSCOPE_AGENT` overrides it).
 - The frontend talks to the job through a backend. The backend also answers internal `xtcscope _backend` commands (`inspect`, `gro`, `fetch`, `close`), versioned by a protocol number, ready for running it on another machine.
+- `--remote HOST`: the job is resolved, its files listed and its frames extracted on `HOST` (any destination `ssh` accepts, e.g. an alias from `~/.ssh/config`), and the GRO and the frames are copied here for the viewer. One SSH connection to `HOST` carries everything, so a password or passphrase is asked for at most once. Messages from `HOST` are tagged with its name. Needs the same xtcscope release on both machines; a different protocol is exit 10, a different version only a warning.
 - The node connection lives in a private socket directory (`$XDG_RUNTIME_DIR/xtcscope` or `/tmp/xtcscope-<uid>`) and expires by itself 120 s after it was last used, so an interrupted run leaves nothing behind for long.
 
 ## v0.1.0

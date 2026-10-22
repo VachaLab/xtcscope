@@ -15,7 +15,8 @@ FAKE_XTC = bytes.fromhex("000007cb0000bc55") + bytes(range(256)) * 4
 
 # logs its arguments; a master connection is a file at its control socket path,
 # which -O check looks for and -O exit removes; a remote command replaces this
-# process with bash, so terminating ssh stops the agent
+# process with bash, with $HOME set to the host's home from $FAKE_HOSTS, so
+# terminating ssh stops whatever runs "there"
 FAKE_SSH = """\
 #!{python}
 import json, os, sys
@@ -23,8 +24,9 @@ args = sys.argv[1:]
 with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(json.dumps(["ssh", *args]) + "\\n")
 control = args[args.index("-S") + 1] if "-S" in args else None
-if os.environ.get("FAKE_SSH_FAIL") and "-M" in args:
-    print("ssh: connect to host node42: Connection refused", file=sys.stderr)
+fail = os.environ.get("FAKE_SSH_FAIL")
+if fail and "-M" in args and fail in ("1", args[-1]):
+    print(f"ssh: connect to host {{args[-1]}}: Connection refused", file=sys.stderr)
     sys.exit(255)
 if "-M" in args:
     open(control, "w").close()
@@ -38,7 +40,11 @@ if "-O" in args:
 if os.environ.get("FAKE_SSH_DROP") and "extract" in args[-1]:
     print("Connection to node42 closed by remote host.", file=sys.stderr)
     sys.exit(255)
-os.execvp("bash", ["bash", "-c", args[-1]])
+host, command = args[-2], args[-1]
+homes = json.loads(os.environ.get("FAKE_HOSTS", "{{}}"))
+if host in homes:
+    os.environ["HOME"] = homes[host]
+os.execvp("bash", ["bash", "-c", command])
 """
 
 # behaves like `xtcscope-agent extract` according to FAKE_AGENT_MODE
@@ -115,9 +121,29 @@ class FakeJob:
             return []
         return [json.loads(line) for line in self.log.read_text().splitlines()]
 
-    def ssh_calls(self) -> list[list]:
-        """The argument lists the fake ssh was called with."""
-        return [c[1:] for c in self.calls() if c[0] == "ssh"]
+    def ssh_calls(self, host: str | None = None) -> list[list]:
+        """The argument lists the fake ssh was called with; only those for `host` if given."""
+        calls = [c[1:] for c in self.calls() if c[0] == "ssh"]
+        return [c for c in calls if host is None or c[-1] == host or c[-2] == host]
+
+    def describe(self, **changes) -> Path:
+        """
+        Write the job description the qq stand-in in tests/stubs serves ($FAKE_QQ_JOB).
+
+        The defaults describe this fake job; `changes` override them.
+        """
+        job = {
+            "job_id": "123.pbs",
+            "name": "mdrun",
+            "node": "node42",
+            "work_dir": str(self.work),
+            "input_dir": str(self.input),
+            "batch_system": "PBS",
+            "shared": False,
+        }
+        path = self.root / "job.json"
+        path.write_text(json.dumps(job | changes))
+        return path
 
 
 @pytest.fixture
@@ -136,6 +162,7 @@ def fake_job(tmp_path, monkeypatch):
     write_executable(job.agent, FAKE_AGENT)
     monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}:{os.environ['PATH']}")
     monkeypatch.setenv("HOME", str(job.home))
+    monkeypatch.setenv("FAKE_HOSTS", json.dumps({"node42": str(job.home)}))
     monkeypatch.setenv("FAKE_LOG", str(job.log))
     monkeypatch.setenv("FAKE_XTC_HEX", FAKE_XTC.hex())
     monkeypatch.delenv("XTCSCOPE_VIEWER", raising=False)

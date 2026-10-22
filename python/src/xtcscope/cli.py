@@ -39,6 +39,14 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--remote",
+        metavar="HOST",
+        help=(
+            "Run the job lookup and the extraction on HOST over SSH, and the viewer here. "
+            "HOST is anything ssh accepts, e.g. an alias from ~/.ssh/config. Needs a job ID."
+        ),
+    )
+    parser.add_argument(
         "--access",
         choices=ACCESS_MODES,
         default=ACCESS_AUTO,
@@ -100,7 +108,10 @@ def main(argv: list[str] | None = None) -> int:
         if argv[:1] == [BACKEND_COMMAND]:
             return backend_main(argv[1:])
 
-        args = build_parser().parse_args(argv)
+        parser = build_parser()
+        args = parser.parse_args(argv)
+        if args.remote is not None and args.job_id is None:
+            parser.error("--remote needs a job ID")
         set_debug(args.debug)
         return run(args)
     except XtcscopeError as err:

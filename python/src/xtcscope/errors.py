@@ -11,7 +11,12 @@ EXIT_MISMATCH = 6
 EXIT_SSH = 7
 EXIT_AGENT = 8
 EXIT_VIEWER = 9
+EXIT_BACKEND = 10
 EXIT_INTERRUPTED = 130
+
+# version of the `xtcscope _backend` protocol; bumped on any incompatible change
+# to its commands, options or JSON fields (new optional fields don't bump it)
+PROTOCOL = 1
 
 
 class XtcscopeError(Exception):

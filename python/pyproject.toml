@@ -38,3 +38,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.ty.src]
+# the qq stand-in for subprocess tests shadows the real qq_lib on purpose
+exclude = ["tests/stubs"]

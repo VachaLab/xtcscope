@@ -18,15 +18,17 @@ Modules of the package:
 
 | Module | Contents |
 | --- | --- |
-| `cli.py` | options, `main()`, exit handling, signals |
-| `frontend.py` | `run()`: the flow from arguments to the closed viewer |
+| `cli.py` | options, `main()`, exit handling, signals; hands `_backend` to `backend.py` |
+| `frontend.py` | `run()`: the flow from arguments to the closed viewer, through a backend |
+| `backend.py` | resolving the job, listing its files, planning the extraction (`LocalBackend`); the `_backend` commands |
 | `job.py` | finding the job through qq; the access rule (direct or through the node) |
 | `files.py` | GRO and XTC listings, atom counts, size and time formatting |
 | `choose.py` | choosing a file: requested, the only one, or by asking |
-| `transport.py` | running commands here (`LocalRunner`) or on a node over SSH (`SshRunner`) |
+| `transport.py` | running commands here (`LocalRunner`) or on a node over SSH (`SshRunner`); the control-socket directory |
 | `agent.py` | the extract command and reading the agent's output |
 | `viewer.py` | checking and running the viewer |
-| `errors.py`, `log.py` | exit codes, `XtcscopeError`, messages |
+| `errors.py`, `log.py` | exit codes, `XtcscopeError`, the backend protocol version, messages |
+| `argtypes.py` | argparse types shared by both command lines |
 
 ## Rust agent
 
@@ -62,7 +64,14 @@ cargo build --release --target x86_64-unknown-linux-musl
 
 ## Python package
 
-Everything runs from `python/`. The tests need neither qq nor a cluster: the job lookup is replaced by a stub, and fake `ssh`, agent and viewer programs are put on `PATH`. `--dry-run` against a real job needs both.
+Everything runs from `python/`. The tests need neither qq nor a cluster: the job lookup is replaced by a stub, and fake `ssh`, agent and viewer programs are put on `PATH`. Tests that run `xtcscope _backend` in a subprocess put `tests/stubs` on `PYTHONPATH`, where a small stand-in for `qq_lib` serves the job described in `$FAKE_QQ_JOB`. `--dry-run` against a real job needs both.
+
+The backend commands can be tried by hand on a machine with qq (`--run` is any 8 hex characters):
+
+```bash
+xtcscope _backend inspect --protocol 1 --run abcd1234 <job_id>
+xtcscope _backend close --protocol 1 --run abcd1234 --node <node>
+```
 
 ```bash
 cd python

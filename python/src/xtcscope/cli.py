@@ -3,9 +3,11 @@
 import argparse
 import os
 import signal
-from collections.abc import Callable
+import sys
 
 from xtcscope import __version__
+from xtcscope.argtypes import file_path, frames_count
+from xtcscope.backend import BACKEND_COMMAND, backend_main
 from xtcscope.errors import EXIT_INTERRUPTED, XtcscopeError
 from xtcscope.frontend import run
 from xtcscope.job import ACCESS_AUTO, ACCESS_MODES
@@ -15,34 +17,6 @@ from xtcscope.log import error, set_debug
 DEFAULT_FRAMES = 10
 # viewer used when neither --viewer nor XTCSCOPE_VIEWER is set
 DEFAULT_VIEWER = "vmd"
-
-
-def frames_count(value: str) -> int:
-    """argparse type for -n: an integer of at least 1."""
-    try:
-        number = int(value)
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"invalid number of frames: '{value}'") from None
-    if number < 1:
-        raise argparse.ArgumentTypeError("the number of frames must be at least 1")
-    return number
-
-
-def file_path(suffix: str) -> Callable[[str], str]:
-    """
-    argparse type for --gro/--xtc: a file path with the given suffix.
-
-    The path stays as given; it is resolved later against the job's input or
-    working directory (an absolute path stays absolute).
-    """
-
-    def check(value: str) -> str:
-        """Reject wrong suffixes."""
-        if not value.endswith(suffix):
-            raise argparse.ArgumentTypeError(f"'{value}' does not end in {suffix}")
-        return value
-
-    return check
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -118,12 +92,16 @@ def raise_interrupt(signum, frame) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point. Returns the process exit code."""
-    args = build_parser().parse_args(argv)
-    set_debug(args.debug)
+    """Entry point: `xtcscope ...`, or `xtcscope _backend ...`. Returns the exit code."""
+    argv = sys.argv[1:] if argv is None else argv
     previous = signal.signal(signal.SIGTERM, raise_interrupt)
 
     try:
+        if argv[:1] == [BACKEND_COMMAND]:
+            return backend_main(argv[1:])
+
+        args = build_parser().parse_args(argv)
+        set_debug(args.debug)
         return run(args)
     except XtcscopeError as err:
         error(str(err))

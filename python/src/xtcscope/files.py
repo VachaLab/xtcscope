@@ -117,7 +117,7 @@ def list_xtc_files(runner: Runner, work_dir: Path, requested: str | None = None)
     With `requested`, only that file (relative to `work_dir`, or absolute) is listed.
     """
     result = runner.run(xtc_listing_command(work_dir, requested))
-    if runner.connection_lost(result.returncode):
+    if result.returncode == runner.lost_code:
         raise XtcscopeError(
             f"Lost the connection to {runner.label}: {result.stderr.strip()}", EXIT_SSH
         )

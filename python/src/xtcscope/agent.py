@@ -12,7 +12,7 @@ from pathlib import Path
 from xtcscope.errors import EXIT_AGENT, EXIT_SSH, XtcscopeError
 from xtcscope.files import format_ps, human_size
 from xtcscope.log import debug, info, warn
-from xtcscope.transport import COMMAND_NOT_FOUND, Runner
+from xtcscope.transport import COMMAND_NOT_FOUND
 
 # the agent on the node; $HOME is expanded by the remote shell
 AGENT = '"$HOME/xtcscope/xtcscope-agent"'
@@ -61,6 +61,17 @@ def extracted_name(xtc_name: str, frames: int) -> str:
 
 
 @dataclass(frozen=True)
+class FetchPlan:
+    """The command that streams the frames to stdout, and how to read its failures."""
+
+    argv: list[str]
+    # where the agent runs, for messages: "this machine" or a node name
+    label: str
+    # exit status of ssh when the connection itself failed; None when nothing connects
+    lost_code: int | None
+
+
+@dataclass(frozen=True)
 class Fetched:
     """What the agent reported about the frames it copied."""
 
@@ -83,15 +94,15 @@ def parse_event(line: str) -> dict | None:
     return None
 
 
-def fetch_frames(runner: Runner, command: str, xtc_name: str, destination: Path) -> Fetched:
+def fetch_frames(plan: FetchPlan, xtc_name: str, destination: Path) -> Fetched:
     """
-    Run the agent's extract `command` through `runner`, saving its stdout to `destination`.
+    Run the extraction `plan`, saving the frames it streams to `destination`.
 
     Warnings are shown as they arrive. The result is checked: the agent must
     exit 0, report `located` and `done`, and the file must have exactly the
     size both events report.
     """
-    argv = runner.argv(command)
+    argv = plan.argv
     debug(f"$ {shlex.join(argv)} > {destination}")
     located = done = failure = None
     other_lines: list[str] = []
@@ -139,24 +150,24 @@ def fetch_frames(runner: Runner, command: str, xtc_name: str, destination: Path)
 
     if failure is not None:
         raise XtcscopeError(
-            f"The agent on {runner.label} failed: {failure.get('message')} ({failure.get('code')})",
+            f"The agent on {plan.label} failed: {failure.get('message')} ({failure.get('code')})",
             EXIT_AGENT,
         )
 
     if code == COMMAND_NOT_FOUND and any("xtcscope-agent" in line for line in other_lines):
         raise XtcscopeError(
-            f"xtcscope-agent is not installed on {runner.label}; run the installer.", EXIT_AGENT
+            f"xtcscope-agent is not installed on {plan.label}; run the installer.", EXIT_AGENT
         )
 
-    if runner.connection_lost(code):
-        raise XtcscopeError(f"Lost the connection to {runner.label}.", EXIT_SSH)
+    if code == plan.lost_code:
+        raise XtcscopeError(f"Lost the connection to {plan.label}.", EXIT_SSH)
 
     if code != 0:
         detail = "; ".join(other_lines[-3:]) or "no message"
-        raise XtcscopeError(f"The agent on {runner.label} exited with {code}: {detail}", EXIT_AGENT)
+        raise XtcscopeError(f"The agent on {plan.label} exited with {code}: {detail}", EXIT_AGENT)
 
     if located is None or done is None:
-        raise XtcscopeError(f"The agent on {runner.label} did not report its work.", EXIT_AGENT)
+        raise XtcscopeError(f"The agent on {plan.label} did not report its work.", EXIT_AGENT)
 
     if not (size == located["bytes"] == done["bytes"]):
         raise XtcscopeError(

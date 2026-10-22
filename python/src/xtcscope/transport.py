@@ -1,9 +1,14 @@
 """Running shell commands: on this machine, or on a node over an SSH master connection."""
 
+import os
+import secrets
 import shlex
+import stat
 import subprocess
+import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol, Self
+from typing import Protocol
 
 from xtcscope.errors import EXIT_SSH, XtcscopeError
 from xtcscope.log import debug
@@ -12,6 +17,9 @@ from xtcscope.log import debug
 SSH_FAILED = 255
 # exit status of a shell (or nice) when a command does not exist
 COMMAND_NOT_FOUND = 127
+# seconds an idle node connection outlives the process that opened it, so that
+# `_backend fetch` can reuse the connection `_backend inspect` opened
+NODE_PERSIST = 120
 
 
 class Runner(Protocol):
@@ -19,6 +27,15 @@ class Runner(Protocol):
 
     # where the commands run, for messages: "this machine" or a node name
     label: str
+
+    @property
+    def lost_code(self) -> int | None:
+        """Exit status that means the connection failed, not the command; None without one."""
+        ...
+
+    def open(self) -> None:
+        """Get ready to run commands; reuse what is already there."""
+        ...
 
     def argv(self, command: str) -> list[str]:
         """The local command that runs the shell command `command`."""
@@ -28,16 +45,8 @@ class Runner(Protocol):
         """Run a shell command and capture its output as text."""
         ...
 
-    def connection_lost(self, returncode: int) -> bool:
-        """Whether `returncode` means the connection failed, not the command."""
-        ...
-
-    def __enter__(self) -> Self:
-        """Get ready to run commands."""
-        ...
-
-    def __exit__(self, *exc) -> None:
-        """Release what `__enter__` acquired."""
+    def close(self) -> None:
+        """Release what `open` acquired; errors are ignored."""
         ...
 
 
@@ -45,6 +54,10 @@ class LocalRunner:
     """Runs shell commands on this machine, through bash."""
 
     label = "this machine"
+    lost_code = None
+
+    def open(self) -> None:
+        """Nothing to prepare."""
 
     def argv(self, command: str) -> list[str]:
         """The local command that runs the shell command `command`."""
@@ -57,16 +70,41 @@ class LocalRunner:
 
         return subprocess.run(argv, capture_output=True, text=True)
 
-    def connection_lost(self, returncode: int) -> bool:
-        """There is no connection to lose."""
-        return False
-
-    def __enter__(self) -> Self:
-        """Nothing to prepare."""
-        return self
-
-    def __exit__(self, *exc) -> None:
+    def close(self) -> None:
         """Nothing to release."""
+
+
+def socket_dir() -> Path:
+    """
+    The private directory for SSH control sockets, created if needed.
+
+    $XDG_RUNTIME_DIR/xtcscope if that variable is set, else /tmp/xtcscope-<uid>,
+    with mode 0700. A directory that is not ours alone is refused.
+    """
+    base = os.environ.get("XDG_RUNTIME_DIR")
+    if base:
+        path = Path(base) / "xtcscope"
+    else:
+        path = Path(tempfile.gettempdir()) / f"xtcscope-{os.getuid()}"
+
+    try:
+        path.mkdir(mode=0o700, exist_ok=True)
+        info = path.lstat()
+    except OSError as err:
+        raise XtcscopeError(f"Could not create {path}: {err.strerror}.", EXIT_SSH) from err
+
+    private = stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
+    if not private or info.st_mode & 0o077:
+        raise XtcscopeError(
+            f"{path} must be a directory only you can access; remove it and try again.", EXIT_SSH
+        )
+
+    return path
+
+
+def new_run_id() -> str:
+    """A fresh run id: 8 hex characters naming this run's control sockets."""
+    return secrets.token_hex(4)
 
 
 def node_ssh_options(timeout: int) -> list[str]:
@@ -86,21 +124,44 @@ def node_ssh_options(timeout: int) -> list[str]:
 
 
 class SshRunner:
-    """Runs shell commands on a node over one SSH master connection."""
+    """
+    Runs shell commands on a node over one SSH master connection.
 
-    def __init__(self, node: str, tmp_dir: Path, timeout: int):
-        """Prepare a connection to `node`; its control socket lives in `tmp_dir`."""
+    The master outlives this object for NODE_PERSIST seconds of idleness, so
+    another process can reuse it through the same control socket.
+    """
+
+    lost_code = SSH_FAILED
+
+    def __init__(self, node: str, control: Path, timeout: Callable[[], int]):
+        """Prepare a connection to `node` through the control socket `control`."""
         self.label = node
         self.node = node
-        self.control = tmp_dir / "ctl"
+        self.control = control
+        # called only when a new connection is opened (it may import qq)
         self.timeout = timeout
-        self.is_open = False
+
+    def is_alive(self) -> bool:
+        """Whether a master connection answers on the control socket."""
+        if not self.control.exists():
+            return False
+
+        command = ["ssh", "-S", str(self.control), "-O", "check", self.node]
+        debug(f"$ {shlex.join(command)}")
+        return subprocess.run(command, capture_output=True).returncode == 0
 
     def open(self) -> None:
-        """Open the master connection; one authentication for the whole run."""
+        """Reuse a live master connection, or open one: one authentication per run."""
+        if self.is_alive():
+            return
+
+        # a socket left by a master that has exited would stop a new one from starting
+        self.control.unlink(missing_ok=True)
         command = [
             "ssh",
-            *node_ssh_options(self.timeout),
+            *node_ssh_options(self.timeout()),
+            "-o",
+            f"ControlPersist={NODE_PERSIST}",
             "-M",
             "-S",
             str(self.control),
@@ -116,8 +177,6 @@ class SshRunner:
             reason = f": {detail[-1]}" if detail else ""
             raise XtcscopeError(f"Could not connect to {self.node}{reason}", EXIT_SSH)
 
-        self.is_open = True
-
     def argv(self, command: str) -> list[str]:
         """The local command that runs `command` on the node over the master connection."""
         return ["ssh", "-S", str(self.control), self.node, command]
@@ -129,25 +188,11 @@ class SshRunner:
 
         return subprocess.run(argv, capture_output=True, text=True)
 
-    def connection_lost(self, returncode: int) -> bool:
-        """Whether ssh itself failed, rather than the command on the node."""
-        return returncode == SSH_FAILED
-
     def close(self) -> None:
-        """Close the master connection; errors are ignored."""
-        if not self.is_open:
+        """Close the master connection, whoever opened it; errors are ignored."""
+        if not self.control.exists():
             return
 
         command = ["ssh", "-S", str(self.control), "-O", "exit", self.node]
         debug(f"$ {shlex.join(command)}")
         subprocess.run(command, capture_output=True)
-        self.is_open = False
-
-    def __enter__(self) -> Self:
-        """Open the connection."""
-        self.open()
-        return self
-
-    def __exit__(self, *exc) -> None:
-        """Close the connection."""
-        self.close()

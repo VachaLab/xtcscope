@@ -40,10 +40,11 @@ def test_full_run(fake_job, capsys):
     assert xtc.endswith("/md.last7.xtc")
     assert size == len(FAKE_XTC) and same, "the viewer got the complete file"
 
-    exit_index = next(i for i, c in enumerate(calls) if c[0] == "ssh" and "-O" in c)
+    exit_index = next(i for i, c in enumerate(calls) if c[0] == "ssh" and "exit" in c)
     assert exit_index < kinds.index("viewer"), "connection closed before the viewer"
     assert sum(c[0] == "ssh" and "-M" in c for c in calls) == 1
     assert temp_dirs() == before, "temporary directory removed"
+    assert list(fake_job.sockets.iterdir()) == [], "no control socket left"
     err = capsys.readouterr().err
     assert "Fetching 10 frames (0-18 ps, 1.0 kB) from md.xtc" in err
     assert "Opening conf.gro and md.last7.xtc in viamd" in err

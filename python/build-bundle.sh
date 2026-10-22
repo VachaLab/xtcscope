@@ -14,6 +14,8 @@
 #      in src/xtcscope/__init__.py).
 #   3. The frozen build imports qq: asking for a job on a machine without a
 #      batch system must fail with exit 3, not with a missing module.
+#   4. The `_backend` entry point answers: a protocol mismatch gives a JSON
+#      error and exit 10.
 
 set -euo pipefail
 
@@ -70,5 +72,13 @@ set -e
 [[ $job_status -eq 3 && "$job_output" == *"Could not find job"* ]] \
     || die "Expected exit 3 asking for a job without a batch system, got ${job_status}: ${job_output}"
 info "qq is importable in the frozen build."
+
+set +e
+backend_output="$("${BUNDLE}/xtcscope" _backend inspect --protocol 999 --run 00000000 1 2>/dev/null)"
+backend_status=$?
+set -e
+[[ $backend_status -eq 10 && "$backend_output" == *'"exit_code": 10'* ]] \
+    || die "Expected a JSON protocol error and exit 10 from _backend, got ${backend_status}: ${backend_output}"
+info "The _backend entry point answers."
 
 info "Bundle ready in python/${BUNDLE} ($(du -sh "$BUNDLE" | cut -f1))."

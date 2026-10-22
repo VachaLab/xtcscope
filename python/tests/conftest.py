@@ -13,19 +13,28 @@ from xtcscope.job import Job
 # bytes the fake agent "extracts": an XTC header for 48213 atoms, then filler
 FAKE_XTC = bytes.fromhex("000007cb0000bc55") + bytes(range(256)) * 4
 
-# logs its arguments; the master connection and -O exit just succeed; a remote
-# command replaces this process with bash, so terminating ssh stops the agent
+# logs its arguments; a master connection is a file at its control socket path,
+# which -O check looks for and -O exit removes; a remote command replaces this
+# process with bash, so terminating ssh stops the agent
 FAKE_SSH = """\
 #!{python}
 import json, os, sys
 args = sys.argv[1:]
 with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(json.dumps(["ssh", *args]) + "\\n")
+control = args[args.index("-S") + 1] if "-S" in args else None
 if os.environ.get("FAKE_SSH_FAIL") and "-M" in args:
     print("ssh: connect to host node42: Connection refused", file=sys.stderr)
     sys.exit(255)
-if "-M" in args or "-O" in args:
+if "-M" in args:
+    open(control, "w").close()
     sys.exit(0)
+if "-O" in args:
+    operation = args[args.index("-O") + 1]
+    alive = os.path.exists(control)
+    if operation == "exit" and alive:
+        os.remove(control)
+    sys.exit(0 if alive else 255)
 if os.environ.get("FAKE_SSH_DROP") and "extract" in args[-1]:
     print("Connection to node42 closed by remote host.", file=sys.stderr)
     sys.exit(255)
@@ -94,6 +103,7 @@ class FakeJob:
         self.work = root / "scratch"
         self.home = root / "home"
         self.log = root / "calls.log"
+        self.sockets = root / "run" / "xtcscope"
         self.agent = self.home / "xtcscope" / "xtcscope-agent"
         # what the access rule sees: is the working directory shared, and this machine's names
         self.shared = False
@@ -130,6 +140,8 @@ def fake_job(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_XTC_HEX", FAKE_XTC.hex())
     monkeypatch.delenv("XTCSCOPE_VIEWER", raising=False)
     monkeypatch.delenv("XTCSCOPE_AGENT", raising=False)
+    (tmp_path / "run").mkdir(mode=0o700)
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "run"))
 
     job.input.mkdir()
     (job.input / "conf.gro").write_text("title\n48213\n")
@@ -138,9 +150,9 @@ def fake_job(tmp_path, monkeypatch):
 
     # replaced where the flow looks them up, so qq is never imported
     stub = Job("123.pbs", "mdrun", "node42", job.work, job.input, "PBS")
-    monkeypatch.setattr("xtcscope.frontend.find_job", lambda job_id: stub)
-    monkeypatch.setattr("xtcscope.frontend.ssh_timeout", lambda: 60)
-    monkeypatch.setattr("xtcscope.frontend.work_dir_is_shared", lambda system, path: job.shared)
-    monkeypatch.setattr("xtcscope.frontend.local_host_names", lambda: job.local_names)
+    monkeypatch.setattr("xtcscope.backend.find_job", lambda job_id: stub)
+    monkeypatch.setattr("xtcscope.backend.ssh_timeout", lambda: 60)
+    monkeypatch.setattr("xtcscope.backend.work_dir_is_shared", lambda system, path: job.shared)
+    monkeypatch.setattr("xtcscope.backend.local_host_names", lambda: job.local_names)
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
     return job

@@ -7,6 +7,8 @@
 - The release workflow checks that the tag matches both `agent/Cargo.toml` and `python/src/xtcscope/__init__.py`, and checks the bundle's glibc floor (2.28).
 - The working directory is read directly, without SSH, when it exists on this machine and is either shared storage or belongs to a job running on this machine. `--access auto|direct|node` overrides the choice; the choice is shown as an INFO line and in `--dry-run`.
 - For direct access, the agent next to the `xtcscope` executable is used (`$XTCSCOPE_AGENT` overrides it).
+- The frontend talks to the job through a backend. The backend also answers internal `xtcscope _backend` commands (`inspect`, `gro`, `fetch`, `close`), versioned by a protocol number, ready for running it on another machine.
+- The node connection lives in a private socket directory (`$XDG_RUNTIME_DIR/xtcscope` or `/tmp/xtcscope-<uid>`) and expires by itself 120 s after it was last used, so an interrupted run leaves nothing behind for long.
 
 ## v0.1.0
 

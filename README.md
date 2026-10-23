@@ -16,7 +16,7 @@ bash <(curl -fsSL https://github.com/VachaLab/xtcscope/releases/latest/download/
 | Where                                            | Installer                         | Installs into                                   |
 | ------------------------------------------------ | --------------------------------- | ----------------------------------------------- |
 | Robox                                            | `xtcscope-robox-install.sh`       | `$HOME` and `/storage/brno14-ceitec/home/$USER` |
-| Metacentrum                                      | `xtcscope-metacentrum-install.sh` | `$HOME` and every Metacentrum storage home      |
+| Metacentrum Grid                                 | `xtcscope-metacentrum-install.sh` | `$HOME` and every Metacentrum storage home      |
 | Sokar                                            | `xtcscope-sokar-install.sh`       | `$HOME`                                         |
 | Karolina                                         | `xtcscope-karolina-install.sh`    | `$HOME`                                         |
 | LUMI                                             | `xtcscope-lumi-install.sh`        | `$HOME`                                         |

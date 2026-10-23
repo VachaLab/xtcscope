@@ -12,6 +12,7 @@ from xtcscope.errors import EXIT_INTERRUPTED, XtcscopeError
 from xtcscope.frontend import run
 from xtcscope.job import ACCESS_AUTO, ACCESS_MODES
 from xtcscope.log import error, set_debug
+from xtcscope.runtime import restore_library_path
 
 # frames fetched when -n is not given
 DEFAULT_FRAMES = 10
@@ -100,6 +101,7 @@ def raise_interrupt(signum, frame) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point: `xtcscope ...`, or `xtcscope _backend ...`. Returns the exit code."""
+    restore_library_path()
     argv = sys.argv[1:] if argv is None else argv
     previous = signal.signal(signal.SIGTERM, raise_interrupt)
 

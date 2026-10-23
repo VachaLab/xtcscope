@@ -16,6 +16,8 @@
 #      batch system must fail with exit 3, not with a missing module.
 #   4. The `_backend` entry point answers: a protocol mismatch gives a JSON
 #      error and exit 10.
+#   5. Programs the bundle starts (ssh, the agent, the viewer) get the caller's
+#      LD_LIBRARY_PATH back, not the bundle's _internal/.
 
 set -euo pipefail
 
@@ -80,5 +82,19 @@ set -e
 [[ $backend_status -eq 10 && "$backend_output" == *'"exit_code": 10'* ]] \
     || die "Expected a JSON protocol error and exit 10 from _backend, got ${backend_status}: ${backend_output}"
 info "The _backend entry point answers."
+
+# a child of the bundle must see the caller's LD_LIBRARY_PATH, not the bundle's
+# _internal/, or ssh could load the bundle's libraries (e.g. breaking Kerberos)
+probe="$(mktemp)"
+# shellcheck disable=SC2016
+printf '#!/bin/sh\necho "LD_LIBRARY_PATH=${LD_LIBRARY_PATH-unset}" >&2\nexit 3\n' > "$probe"
+chmod +x "$probe"
+child_env="$(XTCSCOPE_AGENT="$probe" "${BUNDLE}/xtcscope" _backend fetch --protocol 1 \
+    --run 00000000 --access direct --node none --xtc /nonexistent.xtc --frames 1 2>&1 >/dev/null || true)"
+rm -f "$probe"
+expected="LD_LIBRARY_PATH=${LD_LIBRARY_PATH-unset}"
+[[ "$child_env" == *"$expected"* ]] \
+    || die "Children of the bundle see the wrong library path: ${child_env} (expected ${expected})."
+info "Children of the bundle get the caller's LD_LIBRARY_PATH."
 
 info "Bundle ready in python/${BUNDLE} ($(du -sh "$BUNDLE" | cut -f1))."

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.1
+
+- Programs started by xtcscope (ssh, the agent, the viewer) get the system's libraries, not the bundle's: the bundle no longer passes its own `LD_LIBRARY_PATH` on, which could break ssh's Kerberos authentication.
+
 ## v0.2.0
 
 - `--remote HOST`: look up the job and extract its frames on `HOST` (any destination `ssh` accepts, such as an alias from `~/.ssh/config`), and view them here, e.g. from a laptop at home. One SSH connection carries the whole run, so a password is asked for at most once. Both machines need the same release: a different version is a warning, an incompatible one exit 10.

@@ -122,6 +122,14 @@ To change the default for good, set `XTCSCOPE_VIEWER` in your `.bashrc`, e.g. `e
 | 10   | xtcscope on the `--remote` host failed: not installed there, a different release, or an error.         |
 | 130  | Interrupted (Ctrl-C).                                                                                  |
 
+## How it works
+
+xtcscope gets the job's main node, working directory and input directory from [qq_lib](https://qq.readthedocs.io/en/stable/qq_lib.html). It takes the GRO from the input directory and lists the XTC files in the working directory, checking that their atom counts match. If the working directory is readable on this machine, everything runs locally; otherwise xtcscope opens one SSH master connection to the main node.
+
+On the node, `xtcscope-agent` (a static Rust binary) scans the XTC backwards from its end for frame headers. It accepts the last N frames only if they chain exactly to the end of the file, so a frame mdrun is still writing is skipped. It streams those frames' bytes, unchanged, into a temporary file, which together with the GRO is opened in your viewer and deleted when the viewer exits.
+
+With `--remote HOST`, xtcscope runs itself on `HOST` over a single SSH connection. `HOST` performs all of the above, reaching the node with its own credentials, and only the GRO and the extracted frames come back to your machine.
+
 ## Limitations
 
 - **Only qq jobs on supported clusters.** xtcscope can only be used with qq jobs, which also means that it only works on qq-supported clusters (Robox, Sokar, Metacentrum Grid, Karolina, LUMI).
@@ -138,7 +146,7 @@ Hardly. The agent runs on the compute node only for a moment: it reads the end o
 
 ### Why not run VMD on the compute node instead?
 
-Over X11, every redraw crosses the network as a picture, so rotating and zooming lag. xtcscope sends the coordinates once, and your desktop draws them as fast as a local file.
+Over X11, every redraw crosses the network as a picture, so rotating and zooming lag. xtcscope sends the coordinates once, and your desktop draws them as fast as a local file. VMD on the node also takes CPU and memory from the jobs running there, for as long as you keep it open. That's usually harmless for a quick look, but `xtcscope-agent` needs only a moment at the lowest priority.
 
 ### Why not open the remote XTC in a local VMD through sshfs or a tunnel instead?
 

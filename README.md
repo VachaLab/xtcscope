@@ -1,7 +1,7 @@
 # xtcscope
 
 > [!NOTE]
-> This tool works only with jobs submitted with [qq](https://github.com/VachaLab/qq).
+> This tool was written for the specific needs of the [RoVa research group](https://vacha.ceitec.cz/) and works only with jobs submitted with [qq](https://github.com/VachaLab/qq).
 
 xtcscope shows the last frames of a running GROMACS job straight from the compute node's local scratch. It is much smoother than running VMD on the node and much faster than copying the whole trajectory. It can also be used to view your jobs on Karolina/LUMI from your Robox desktop or to display jobs directly on your home computer.
 
@@ -44,7 +44,9 @@ Go to the directory you submitted the job from and run
 xtcscope
 ```
 
-xtcscope finds the newest qq job there, takes the GRO from that directory and the XTC from the job's working directory, copies the last 10 frames to your desktop, and opens them in VMD. **Note that on Robox, you will need to load a VMD module first.** The copied part of the trajectory is deleted when you close the viewer.
+xtcscope finds the newest qq job there, takes the GRO from that directory and the XTC from the job's working directory, copies the last 10 frames to your desktop, and opens them in VMD. **Note that on Robox, you will need to load a VMD module first.** Also note that you will see 11 frames, where the first frame in VMD corresponds to the structure from the GRO file.
+
+The copied part of the trajectory is deleted when you close the viewer.
 
 More examples:
 

@@ -2,8 +2,7 @@
 The backend: resolving the job, listing its files and planning the extraction.
 
 The frontend calls it in-process through `LocalBackend`. The same functions
-answer the `xtcscope _backend` commands, which `--remote` runs on another
-machine; their protocol is described in the specification.
+answer the `xtcscope _backend` commands, which `--remote` runs on another machine.
 """
 
 import argparse
@@ -132,6 +131,7 @@ def inspect(
         is_shared=partial(work_dir_is_shared, job.batch_system),
         local_names=local_host_names(),
     )
+
     info(f"Reading the working directory {access.describe(job.node)}")
     if access.mode == ACCESS_DIRECT:
         find_local_agent()
@@ -142,6 +142,7 @@ def inspect(
             f"Input directory {job.input_dir} is not accessible from this machine.",
             EXIT_NO_FILE,
         )
+
     gro_files = list_gro_files(job.input_dir, gro)
 
     runner = runner_for(access.mode, job.node, run)
@@ -160,10 +161,11 @@ def inspect(
         gro=gro_files,
         xtc=xtc_files,
     )
+
     return inspection, runner
 
 
-def fetch_plan(mode: str, node: str, xtc: Path, frames: int, runner: Runner) -> FetchPlan:
+def fetch_plan(mode: str, xtc: Path, frames: int, runner: Runner) -> FetchPlan:
     """The command that streams the last `frames` frames of `xtc`, through `runner`."""
     if mode == ACCESS_DIRECT:
         command = extract_command(xtc, frames, find_local_agent())
@@ -227,21 +229,19 @@ class LocalBackend:
 
     def gro_file(self, inspection: Inspection, name: str, tmp_dir: Path) -> Path:
         """The GRO in the input directory; this machine can read it."""
+        _ = tmp_dir
         return inspection.job.input_dir / name
 
     def fetch_plan(self, inspection: Inspection, xtc: Path, frames: int) -> FetchPlan:
         """The extract command, through the connection `inspect` opened."""
         assert self.runner is not None, "inspect comes first"
-        return fetch_plan(inspection.access.mode, inspection.job.node, xtc, frames, self.runner)
+        return fetch_plan(inspection.access.mode, xtc, frames, self.runner)
 
     def close(self) -> None:
         """Close the node connection, if there is one."""
         if self.runner is not None:
             self.runner.close()
             self.runner = None
-
-
-# --- the `xtcscope _backend` commands ---------------------------------------------------
 
 
 def build_backend_parser() -> argparse.ArgumentParser:
@@ -323,7 +323,7 @@ def backend_gro(args: argparse.Namespace) -> int:
 def backend_fetch(args: argparse.Namespace) -> int:
     """`_backend fetch`: replace this process with the extraction, so its output passes through."""
     runner = runner_for(args.access, args.node, args.run)
-    plan = fetch_plan(args.access, args.node, Path(args.xtc), args.frames, runner)
+    plan = fetch_plan(args.access, Path(args.xtc), args.frames, runner)
     sys.stdout.flush()
     sys.stderr.flush()
     os.execvp(plan.argv[0], plan.argv)

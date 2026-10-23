@@ -15,7 +15,7 @@ EXIT_BACKEND = 10
 EXIT_INTERRUPTED = 130
 
 # version of the `xtcscope _backend` protocol; bumped on any incompatible change
-# to its commands, options or JSON fields (new optional fields don't bump it)
+# to its commands, options or JSON fields (new optional fields do not bump it)
 PROTOCOL = 1
 
 

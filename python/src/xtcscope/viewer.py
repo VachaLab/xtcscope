@@ -18,7 +18,8 @@ def viewer_words(viewer: str) -> list[str]:
 
     if shutil.which(words[0]) is None:
         raise XtcscopeError(
-            f"Viewer '{words[0]}' was not found; set it with --viewer or XTCSCOPE_VIEWER.",
+            f"Viewer '{words[0]}' was not found; active the module "
+            "or set the path with --viewer or XTCSCOPE_VIEWER.",
             EXIT_VIEWER,
         )
 
@@ -37,5 +38,6 @@ def launch_viewer(argv: Sequence[str]) -> None:
         result = subprocess.run(argv)
     except OSError as err:
         raise XtcscopeError(f"Could not start the viewer '{argv[0]}': {err}", EXIT_VIEWER) from err
+
     if result.returncode != 0:
         warn(f"The viewer exited with code {result.returncode}.")

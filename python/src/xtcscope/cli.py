@@ -34,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--viewer",
         default=os.environ.get("XTCSCOPE_VIEWER", DEFAULT_VIEWER),
         help=(
-            "Command that opens '<gro> <xtc>', e.g. vmd, vmd2, viamd or 'vmd -nt'. "
+            "Command that opens '<gro> <xtc>', e.g. vmd, viamd or 'vmd -nt'. "
             f"Default: $XTCSCOPE_VIEWER, or {DEFAULT_VIEWER}."
         ),
     )
@@ -43,7 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="HOST",
         help=(
             "Run the job lookup and the extraction on HOST over SSH, and the viewer here. "
-            "HOST is anything ssh accepts, e.g. an alias from ~/.ssh/config. Needs a job ID."
+            "Needs a job ID."
         ),
     )
     parser.add_argument(
@@ -52,8 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=ACCESS_AUTO,
         help=(
             "How to read the job's working directory: directly on this machine, or through "
-            "the job's main node over SSH. auto reads it directly when it exists here and is "
-            "shared storage or the job runs on this machine. Default: auto."
+            "the job's main node over SSH. Use 'auto' to let xtcscope choose. Default: auto."
         ),
     )
     parser.add_argument(

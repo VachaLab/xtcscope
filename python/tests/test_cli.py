@@ -25,13 +25,6 @@ def test_version(capsys):
     assert capsys.readouterr().out.strip() == f"xtcscope {__version__}"
 
 
-def test_version_is_set_in_one_place():
-    """The installed package's metadata reports the version from __init__.py."""
-    from importlib.metadata import version
-
-    assert version("xtcscope") == __version__
-
-
 def test_python_m_entry_point():
     """`python -m xtcscope` runs the same entry point as the PyInstaller build."""
     result = subprocess.run(

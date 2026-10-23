@@ -3,23 +3,11 @@
 > [!NOTE]
 > This tool works only with jobs submitted with [qq](https://github.com/VachaLab/qq).
 
-xtcscope shows the last frames of a running GROMACS job straight from the compute node's local scratch. Much smoother than VMD on the node, and much faster than copying the whole trajectory.
-
-A small Rust program ("agent") on the node reads the XTC _from the end_ and copies the last complete frames through SSH to a temporary file on your desktop, where your viewer opens them like any local trajectory. Even very long trajectories take only a moment to prepare. The simulation is not affected.
-
-xtcscope works with both VMD 1 and 2, as well as with ViaMD and any other molecular viewer that opens `<command> <gro> <xtc>`.
-
-With `--remote`, you can do the same from a machine outside the cluster, such as your laptop at home: the job is looked up and its frames extracted on a machine that can reach the cluster, and only the frames travel to you.
-
-## Requirements
-
-- Linux on x86_64, on every machine involved. Nothing else needs to be installed: xtcscope ships with its own Python.
-- Supports only jobs submitted with [qq](https://github.com/VachaLab/qq). Infinity and raw PBS are **not** supported.
-- You need to have a viewer: VMD 1.9, VMD 2, ViaMD, or another program that opens `<command> <gro> <xtc>`.
+xtcscope shows the last frames of a running GROMACS job straight from the compute node's local scratch. It is much smoother than running VMD on the node and much faster than copying the whole trajectory. It can also be used to view your jobs on Karolina/LUMI from your Robox desktop or to display jobs directly on your home computer.
 
 ## Installing
 
-Install or update the latest release with the installer for your cluster, e.g. for Robox:
+Install or update the latest release with the installer for a specific cluster, e.g. for Robox:
 
 ```bash
 bash <(curl -fsSL https://github.com/VachaLab/xtcscope/releases/latest/download/xtcscope-robox-install.sh)
@@ -36,14 +24,13 @@ bash <(curl -fsSL https://github.com/VachaLab/xtcscope/releases/latest/download/
 
 Each installer puts `xtcscope/` into every home listed and adds it to `PATH` through a block in that home's `.bashrc`; open a new terminal afterwards. Homes that don't exist are skipped with a warning. Running an installer again with the same version changes nothing.
 
-Pre-releases are never "latest"; install one with its own URL:
+If you are using a shell other than bash (zsh, fish), you need to modify the corresponding RC file yourself.
+
+To install a specific version of the tool, use a URL like this:
 
 ```bash
 https://github.com/VachaLab/xtcscope/releases/download/<version>/xtcscope-robox-install.sh
 ```
-
-> [!NOTE]
-> The installer refuses to touch an existing `~/xtcscope` that is not an installation, so don't clone this repository to `~/xtcscope`.
 
 ## Usage
 
@@ -57,18 +44,18 @@ Go to the directory you submitted the job from and run
 xtcscope
 ```
 
-xtcscope finds the newest qq job there, takes the GRO from that directory and the XTC from the job's working directory, copies the last 10 frames to your desktop and opens them in VMD. The copy is deleted when you close the viewer. You may need to load the VMD module before running the command.
+xtcscope finds the newest qq job there, takes the GRO from that directory and the XTC from the job's working directory, copies the last 10 frames to your desktop, and opens them in VMD. **Note that on Robox, you will need to load a VMD module first.** The copied part of the trajectory is deleted when you close the viewer.
 
 More examples:
 
 ```bash
-xtcscope 1234567                    # a job by its ID, from any directory
-xtcscope -n 50                      # the last 50 frames
-xtcscope --viewer viamd             # open in ViaMD
-xtcscope --xtc md_whole.xtc         # pick the XTC without being asked
-xtcscope --xtc run2/md.xtc          # an XTC in a subdirectory of the working directory
-xtcscope --dry-run                  # show what would be fetched and opened
-xtcscope --remote robox 1234567     # from home, through a machine that reaches the cluster
+xtcscope 1234567                                     # a job by its ID, from any directory
+xtcscope -n 50                                       # the last 50 frames
+xtcscope --viewer viamd                              # open in ViaMD
+xtcscope --xtc md_whole.xtc                          # pick the XTC without being asked
+xtcscope --xtc run2/md.xtc                           # an XTC in a subdirectory of the working directory
+xtcscope --dry-run                                   # show what would be fetched and opened
+xtcscope --remote example.ceitec.muni.cz 1234567     # from home, through a machine that reaches the cluster
 ```
 
 ### Options
@@ -93,23 +80,17 @@ When there are several GRO or XTC files, xtcscope lists them, newest first, with
 `--remote HOST` runs everything except the viewer on `HOST`: it finds the job, lists and reads the files, and extracts the frames there, then copies the GRO and the frames to your machine. Use it from home with your work desktop as `HOST`, or from your desktop with a supercomputer's frontend as `HOST`.
 
 1. Install xtcscope on `HOST` (or on the cluster `HOST` belongs to) with the cluster's installer.
-2. Install the same release on your own machine, with `xtcscope-desktop-install.sh` if it has no batch system.
+2. Install the **same version** on your own machine, with `xtcscope-desktop-install.sh` if it has no batch system.
 3. Run `xtcscope --remote HOST JOB_ID`.
 
-`HOST` is anything `ssh` accepts, so an alias from `~/.ssh/config` works, including one that hops through a gateway:
+`HOST` is anything `ssh` accepts, so an alias from `~/.ssh/config` works. You may be asked to type your password when using `--remote`, but at most once.
 
-```ssh-config
-Host robox
-    HostName mydesktop.ceitec.muni.cz
-    User myname
-    ProxyJump gateway.example.cz
-```
-
-One SSH connection carries the whole run, so you type your password or passphrase at most once. Messages from `HOST` are shown tagged with its name, e.g. `INFO    [robox] Job 1234567 ...`. Install the same release on both machines: xtcscope warns about a different version, and stops if the two can no longer talk to each other.
+> [!WARNING]
+> If you want to view a job on a cluster, you first need to install `xtcscope` on that cluster, as shown above. It's not enough to install it only on your desktop.
 
 ### How the working directory is read: `--access`
 
-With the default `--access auto`, xtcscope reads the job's working directory directly, with no SSH to the compute node, when the directory exists on the machine that looks up the job (`HOST` with `--remote`) and either is on shared storage or belongs to a job running on that machine. Otherwise it connects to the job's main node. This covers jobs running on your own desktop, jobs with `--work-dir input_dir`, and supercomputers whose working directories are shared, such as Karolina and LUMI. `--access direct` and `--access node` force either way.
+With the default `--access auto`, xtcscope reads the job's working directory directly, with no SSH to the compute node, when the directory exists on the machine that looks up the job (`HOST` with `--remote`) and either is on shared storage or belongs to a job running on that machine. Otherwise, it connects to the job's main node. This covers jobs running on your own desktop, jobs with `--work-dir input_dir`, and supercomputers whose working directories are shared, such as Karolina and LUMI. You can force a specific way of accessing the working directory with `--access direct` or `--access node`.
 
 ### Viewers
 
@@ -127,7 +108,7 @@ To change the default for good, set `XTCSCOPE_VIEWER` in your `.bashrc`, e.g. `e
 | Code | Meaning                                                                                                |
 | ---- | ------------------------------------------------------------------------------------------------------ |
 | 0    | Done: the viewer was closed.                                                                           |
-| 1    | Unexpected error (a bug; please report it).                                                            |
+| 1    | Unexpected error (a bug; please [report it](https://github.com/VachaLab/xtcscope/issues)).             |
 | 2    | Invalid arguments.                                                                                     |
 | 3    | No job found: unknown ID, or no qq job in the current directory.                                       |
 | 4    | The job has no working directory, or it is not accessible (with `--access direct`: not readable here). |
@@ -141,8 +122,9 @@ To change the default for good, set `XTCSCOPE_VIEWER` in your `.bashrc`, e.g. `e
 
 ## Limitations
 
+- **Only qq jobs on supported clusters.** xtcscope can only be used with qq jobs, which also means that it only works on qq-supported clusters (Robox, Sokar, Metacentrum Grid, Karolina, LUMI).
 - **Does not follow a running simulation.** xtcscope copies the last frames once and doesn't follow the job. To see newer frames, run it again.
-- **The newest frame may be missing.** A frame mdrun is still writing is skipped, and mdrun writes its output in bursts, so the file on the node can lag the simulation by minutes.
+- **The newest frame may be missing.** A frame that mdrun is still writing is skipped, and mdrun writes its output in bursts, so the file on the node can lag behind the simulation by minutes.
 - **The same release everywhere.** With `--remote`, your machine and `HOST` should run the same xtcscope release.
 - **The GRO comes from the input directory.** Its atoms must match the XTC's exactly. A job that writes only some atoms (`compressed-x-grps`) needs a matching GRO in its input directory; files created during the run, such as `confout.gro`, can't be used.
 
@@ -156,24 +138,44 @@ Hardly. The agent runs on the compute node only for a moment: it reads the end o
 
 Over X11, every redraw crosses the network as a picture, so rotating and zooming lag. xtcscope sends the coordinates once, and your desktop draws them as fast as a local file.
 
-### Why not open the remote XTC in a local VMD, through sshfs or a tunnel instead?
+### Why not open the remote XTC in a local VMD through sshfs or a tunnel instead?
 
-An XTC has no index, so VMD has to read the whole file, which can be gigabytes over the network, to reach the last frames. The xtcscope agent jumps to the end and sends only the frames you asked for, so a longer trajectory doesn't slow it down. It also skips a frame mdrun is still writing, which could otherwise cause an error.
+An XTC has no index, so VMD has to read the whole file, which can be gigabytes over the network, to reach the last frames. The xtcscope agent jumps to the end and sends only the frames you asked for, so a longer trajectory doesn't slow it down. It also skips a frame that mdrun is still writing, which could otherwise cause an error.
 
 ### Why not run a VNC server on the compute node and connect to it with a VNC viewer instead?
 
-You would have to start a VNC server and tunnel a port for every job, just for a quick check. VMD on the node also still reads the whole XTC from the start to reach the last frames. xtcscope is one command, and it reads only the end of the file.
+You would have to start a VNC server and tunnel a port for every job, just for a quick check. VMD on the node would also still read the whole XTC from the start to reach the last frames. xtcscope is one command, and it reads only the end of the file.
 
 ## Troubleshooting
 
-| Message                                             | What to do                                                                                        |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `xtcscope-agent is not installed on <node>`         | Run the installer for your cluster; it installs the agent into the cluster home too.              |
-| `xtcscope is not installed on HOST`                 | Install xtcscope on `HOST` with its cluster's installer, then run again.                          |
-| `... speaks backend protocol N, this one speaks M`  | Install the same release on both machines.                                                        |
-| `Could not connect to HOST`                         | Check that `ssh HOST` works on its own.                                                           |
-| `Several XTC files ...; choose one with --xtc PATH` | Without a terminal to ask on, name the file with `--xtc` (or `--gro`).                            |
-| `... has N atoms but ... has M`                     | The GRO and the XTC describe different atoms.                                                     |
-| `Viewer '...' was not found`                        | Install the viewer, activate its module, or point `--viewer` or `XTCSCOPE_VIEWER` at its command. |
+### xtcscope-agent is not installed on node
 
-`--debug` shows every SSH command and every message from the agent (with `--remote`, from `HOST` too), which usually tells where things went wrong. If xtcscope reads the working directory the wrong way, `--access` overrides its choice.
+Run the installer for the given cluster; it installs the agent into the cluster home too.
+
+### xtcscope is not installed on HOST
+
+Install xtcscope on `HOST` with its cluster's installer, then run it again.
+
+### `... speaks backend protocol N, this one speaks M`
+
+Install the same release on both machines.
+
+### Could not connect to HOST
+
+Check that `ssh HOST` works on its own. If it does, [report this issue](https://github.com/VachaLab/xtcscope/issues).
+
+### Several XTC files ...; choose one with --xtc PATH
+
+Without a terminal to ask on, name the file with `--xtc` (or `--gro`).
+
+### ... has N atoms but ... has M
+
+The GRO and XTC files correspond to different systems.
+
+### Viewer '...' was not found
+
+Load the viewer's module, install the viewer yourself, or point `--viewer` or `XTCSCOPE_VIEWER` at its command.
+
+## Disclaimer
+
+This tool was designed by a human ([@Ladme](https://github.com/Ladme)). Most of the code was written by Claude Opus 5.5, based on a specification drafted by the human author and expanded by the model. The documentation was also largely written by Claude. All code and documentation were reviewed by a human. Because the code is largely AI-generated, it is released into the public domain under [The Unlicense](https://unlicense.org/). This means that the human author waives all rights to the software. If you have ethical reservations about AI-assisted software development, nobody forces you to use this ¯\\_(ツ)_/¯.

@@ -1,36 +1,5 @@
 # xtcscope: development
 
-## Repository layout
-
-```
-python/                 the xtcscope command (Python package, uv project)
-python/src/xtcscope/    the package; __init__.py holds the version
-python/tests/           pytest tests (no qq or cluster needed)
-python/xtcscope.spec    PyInstaller spec
-python/build-bundle.sh  builds and checks the PyInstaller bundle
-agent/                  xtcscope-agent (Rust)
-agent/tests/            integration tests; XTC fixtures generated with molly
-install/                installers and their tests
-.github/workflows/      CI and release
-```
-
-Modules of the package:
-
-| Module | Contents |
-| --- | --- |
-| `cli.py` | options, `main()`, exit handling, signals; hands `_backend` to `backend.py` |
-| `frontend.py` | `run()`: the flow from arguments to the closed viewer, through a backend |
-| `backend.py` | resolving the job, listing its files, planning the extraction (`LocalBackend`); the `_backend` commands |
-| `remote.py` | `RemoteBackend`: `--remote`, running the `_backend` commands on another host over one SSH connection |
-| `job.py` | finding the job through qq; the access rule (direct or through the node) |
-| `files.py` | GRO and XTC listings, atom counts, size and time formatting |
-| `choose.py` | choosing a file: requested, the only one, or by asking |
-| `transport.py` | running commands here (`LocalRunner`) or on a node over SSH (`SshRunner`); the control-socket directory |
-| `agent.py` | the extract command and reading the agent's output |
-| `viewer.py` | checking and running the viewer |
-| `errors.py`, `log.py` | exit codes, `XtcscopeError`, the backend protocol version, messages |
-| `argtypes.py` | argparse types shared by both command lines |
-
 ## Rust agent
 
 ```bash

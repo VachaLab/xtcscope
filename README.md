@@ -5,6 +5,14 @@
 
 xtcscope shows the last frames of a running GROMACS job straight from the compute node's local scratch. It is much smoother than running VMD on the node and much faster than copying the whole trajectory. It can also be used to view your jobs on Karolina/LUMI from your Robox desktop or to display jobs directly on your home computer.
 
+## How it works
+
+xtcscope gets the job's main node, working directory and input directory from [qq_lib](https://qq.readthedocs.io/en/stable/qq_lib.html). It takes the GRO from the input directory and lists the XTC files in the working directory, checking that their atom counts match. If the working directory is readable on this machine, everything runs locally; otherwise xtcscope opens one SSH master connection to the main node.
+
+On the node, `xtcscope-agent` (a static Rust binary) scans the XTC backwards from its end for frame headers. It accepts the last N frames only if they chain exactly to the end of the file, so a frame mdrun is still writing is skipped. It streams those frames' bytes, unchanged, into a temporary file, which together with the GRO is opened in your viewer and deleted when the viewer exits.
+
+With `--remote HOST`, xtcscope runs itself on `HOST` over a single SSH connection. `HOST` performs all of the above, reaching the node with its own credentials, and only the GRO and the extracted frames come back to your machine.
+
 ## Installing
 
 Install or update the latest release with the installer for a specific cluster, e.g. for Robox:
@@ -121,14 +129,6 @@ To change the default for good, set `XTCSCOPE_VIEWER` in your `.bashrc`, e.g. `e
 | 9    | The viewer was not found or could not be started.                                                      |
 | 10   | xtcscope on the `--remote` host failed: not installed there, a different release, or an error.         |
 | 130  | Interrupted (Ctrl-C).                                                                                  |
-
-## How it works
-
-xtcscope gets the job's main node, working directory and input directory from [qq_lib](https://qq.readthedocs.io/en/stable/qq_lib.html). It takes the GRO from the input directory and lists the XTC files in the working directory, checking that their atom counts match. If the working directory is readable on this machine, everything runs locally; otherwise xtcscope opens one SSH master connection to the main node.
-
-On the node, `xtcscope-agent` (a static Rust binary) scans the XTC backwards from its end for frame headers. It accepts the last N frames only if they chain exactly to the end of the file, so a frame mdrun is still writing is skipped. It streams those frames' bytes, unchanged, into a temporary file, which together with the GRO is opened in your viewer and deleted when the viewer exits.
-
-With `--remote HOST`, xtcscope runs itself on `HOST` over a single SSH connection. `HOST` performs all of the above, reaching the node with its own credentials, and only the GRO and the extracted frames come back to your machine.
 
 ## Limitations
 

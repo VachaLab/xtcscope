@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.2.2
+
+- Fixed `--remote` freezing while connecting to `HOST` on machines with an older OpenSSH: its background master connection kept the error output open, and xtcscope waited until the connection closed. Connection errors are now captured in a temporary file.
+
 ## v0.2.1
 
 - Programs started by xtcscope (ssh, the agent, the viewer) get the system's libraries, not the bundle's: the bundle no longer passes its own `LD_LIBRARY_PATH` on, which could break ssh's Kerberos authentication.

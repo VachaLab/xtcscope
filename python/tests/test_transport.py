@@ -2,11 +2,12 @@
 
 import os
 import stat
+import time
 
 import pytest
 
 from xtcscope.errors import XtcscopeError
-from xtcscope.transport import LocalRunner, new_run_id, socket_dir
+from xtcscope.transport import LocalRunner, SshRunner, new_run_id, socket_dir
 
 
 def test_socket_dir_is_private(tmp_path, monkeypatch):
@@ -57,3 +58,12 @@ def test_local_runner():
     assert runner.argv("echo hi") == ["bash", "-c", "echo hi"]
     assert runner.run("echo hi").stdout == "hi\n"
     assert runner.lost_code is None
+
+
+def test_open_returns_while_the_master_keeps_stderr_open(fake_job, monkeypatch):
+    """A backgrounded master that keeps stderr open must not make open() wait for it."""
+    monkeypatch.setenv("FAKE_SSH_LINGER", "1")
+    runner = SshRunner("node42", fake_job.root / "ctl", list, 60)
+    started = time.monotonic()
+    runner.open()
+    assert time.monotonic() - started < 5

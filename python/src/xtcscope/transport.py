@@ -189,9 +189,15 @@ class SshRunner:
         ]
 
         debug(f"$ {shlex.join(command)}")
-        result = subprocess.run(command, capture_output=True, text=True)
+        # stderr goes to a file, not a pipe: the backgrounded master (-f) of an older
+        # OpenSSH, or a helper it starts, can keep stderr open, and waiting for the end
+        # of a pipe would then last as long as the master does
+        with tempfile.TemporaryFile(mode="w+") as errors:
+            result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=errors)
+            errors.seek(0)
+            detail = errors.read().strip().splitlines()
+
         if result.returncode != 0:
-            detail = result.stderr.strip().splitlines()
             reason = f": {detail[-1]}" if detail else ""
             raise XtcscopeError(f"Could not connect to {self.destination}{reason}", EXIT_SSH)
 

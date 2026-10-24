@@ -30,6 +30,10 @@ if fail and "-M" in args and fail in ("1", args[-1]):
     sys.exit(255)
 if "-M" in args:
     open(control, "w").close()
+    if os.environ.get("FAKE_SSH_LINGER"):
+        # like an older OpenSSH master, leave a process that keeps stdout and stderr open
+        import subprocess
+        subprocess.Popen(["sleep", "30"])
     sys.exit(0)
 if "-O" in args:
     operation = args[args.index("-O") + 1]
